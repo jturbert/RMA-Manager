@@ -63,9 +63,23 @@ const Auth = (() => {
     _state     = generateVerifier().substring(0, 32);
   }
 
-  // Derive the OAuth callback URL from the current page location
+  // Derive the OAuth callback URL from the current page location.
+  // Works correctly whether the URL has a trailing slash or not, and whether
+  // the current page is index.html or the bare directory URL.
   function getCallbackUrl() {
-    return window.location.href.replace(/[^/]*(\?.*)?$/, '') + 'oauth-callback.html';
+    const origin = window.location.origin;
+    let path = window.location.pathname;
+    if (!path.endsWith('/')) {
+      const lastSegment = path.substring(path.lastIndexOf('/') + 1);
+      if (lastSegment.includes('.')) {
+        // Looks like a file (e.g. index.html) — strip it
+        path = path.substring(0, path.lastIndexOf('/') + 1);
+      } else {
+        // Looks like a directory without trailing slash (e.g. /rma-manager) — add one
+        path = path + '/';
+      }
+    }
+    return origin + path + 'oauth-callback.html';
   }
 
   // ---- Public API ----
@@ -196,6 +210,7 @@ const Auth = (() => {
       const body = new URLSearchParams({
         code,
         client_id:     CONFIG.googleClientId,
+        client_secret: CONFIG.googleClientSecret || '',
         redirect_uri:  getCallbackUrl(),
         code_verifier: codeVerifier,
         grant_type:    'authorization_code'
