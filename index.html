@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RMA Manager</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-left">
+    <div class="app-logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+    </div>
+    <h1 class="app-title">RMA Manager</h1>
+    <span class="version-badge">Web</span>
+  </div>
+  <div class="header-right">
+    <nav class="header-nav">
+      <button class="nav-btn active" onclick="App.showSection('dashboard',this)">Dashboard</button>
+      <button class="nav-btn" onclick="App.showSection('stats',this)">Statistics</button>
+    </nav>
+    <span id="user-name" class="user-name"></span>
+    <button id="auth-btn" class="btn btn-primary" onclick="App.handleAuthClick()">Sign In with Google</button>
+    <button class="btn btn-ghost" onclick="App.showSection('settings')" title="Settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="app-main">
+
+  <div id="setup-banner" class="setup-banner" style="display:none">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>Google credentials not configured. Open <a href="#" onclick="App.showSection('settings'); return false;">Settings</a>. See <strong>SETUP-WEB.md</strong> for instructions.</span>
+  </div>
+
+  <!-- ==================== DASHBOARD ==================== -->
+  <section id="section-dashboard" class="section active">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="filter-tabs">
+          <button class="filter-tab active" onclick="App.setFilter('all',this)">All</button>
+          <button class="filter-tab" onclick="App.setFilter('open',this)">Open</button>
+          <button class="filter-tab" onclick="App.setFilter('closed',this)">Closed</button>
+        </div>
+        <div class="search-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" class="search-input" placeholder="Search RMA#, dealer, model..." oninput="App.onSearch(this.value)">
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <button id="fetch-btn" class="btn btn-primary" onclick="App.fetchEmails()" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Fetch New Emails
+        </button>
+        <button class="btn btn-secondary" onclick="App.exportExcel()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Download Excel
+        </button>
+      </div>
+    </div>
+
+    <div id="progress-wrap" class="progress-wrap" style="display:none">
+      <div class="progress-bar-track"><div id="progress-bar" class="progress-bar-fill"></div></div>
+      <div id="progress-label" class="progress-label">Fetching emails...</div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-number" id="stat-total">0</div><div class="stat-label">Total RMAs</div></div>
+      <div class="stat-card stat-open"><div class="stat-number" id="stat-open">0</div><div class="stat-label">Open</div></div>
+      <div class="stat-card stat-closed"><div class="stat-number" id="stat-closed">0</div><div class="stat-label">Closed</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="rma-table">
+        <thead><tr>
+          <th onclick="App.sortBy('status')" class="sortable">Status <span class="sort-icon">&#8597;</span></th>
+          <th onclick="App.sortBy('rmaNumber')" class="sortable">RMA # <span class="sort-icon">&#8597;</span></th>
+          <th onclick="App.sortBy('date')" class="sortable">Date <span class="sort-icon">&#8597;</span></th>
+          <th onclick="App.sortBy('dealer')" class="sortable">Dealer <span class="sort-icon">&#8597;</span></th>
+          <th onclick="App.sortBy('make')" class="sortable">Brand <span class="sort-icon">&#8597;</span></th>
+          <th onclick="App.sortBy('model')" class="sortable">Model <span class="sort-icon">&#8597;</span></th>
+          <th onclick="App.sortBy('serialNumber')" class="sortable">Serial # <span class="sort-icon">&#8597;</span></th>
+          <th onclick="App.sortBy('warrantyStatus')" class="sortable">Warranty <span class="sort-icon">&#8597;</span></th>
+          <th>Issue</th>
+          <th>Remarks</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody id="rma-tbody">
+          <tr class="empty-row"><td colspan="11"><div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <p>No RMA records yet.</p>
+            <p class="empty-sub">Sign in and click <strong>Fetch New Emails</strong>.</p>
+          </div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="info-notice">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      PDFs are stored in-app. Open any entry and tap <strong>Download</strong> next to each file. Excel downloads to your Downloads folder or iPad Files app.
+    </div>
+  </section>
+
+  <!-- ==================== STATISTICS ==================== -->
+  <section id="section-stats" class="section">
+    <div class="section-header">
+      <button class="btn btn-ghost back-btn" onclick="App.showSection('dashboard')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>Back
+      </button>
+      <h2>Statistics</h2>
+      <span id="stats-subtitle" class="stats-subtitle"></span>
+    </div>
+    <div id="stats-empty" class="stats-empty" style="display:none"><p>No data yet. Import some RMA emails first.</p></div>
+    <div id="stats-content">
+      <div class="stats-overview">
+        <div class="stat-card-lg"><div class="stat-num" id="sv-total">0</div><div class="stat-lbl">Total</div></div>
+        <div class="stat-card-lg s-open"><div class="stat-num" id="sv-open">0</div><div class="stat-lbl">Open</div></div>
+        <div class="stat-card-lg s-closed"><div class="stat-num" id="sv-closed">0</div><div class="stat-lbl">Closed</div></div>
+        <div class="stat-card-lg s-rate"><div class="stat-num" id="sv-confirm">—</div><div class="stat-lbl">Confirmed</div></div>
+        <div class="stat-card-lg"><div class="stat-num" id="sv-warranty">—</div><div class="stat-lbl">In Warranty</div></div>
+      </div>
+      <div class="charts-grid">
+        <div class="chart-card"><h3>By Dealer</h3><div class="bar-legend"><span class="bar-legend-item"><span class="legend-dot legend-dot-open"></span>Open</span><span class="bar-legend-item"><span class="legend-dot legend-dot-closed"></span>Closed</span></div><div id="chart-dealer"></div></div>
+        <div class="chart-card"><h3>By Brand / Make</h3><div class="bar-legend"><span class="bar-legend-item"><span class="legend-dot legend-dot-open"></span>Open</span><span class="bar-legend-item"><span class="legend-dot legend-dot-closed"></span>Closed</span></div><div id="chart-brand"></div></div>
+        <div class="chart-card chart-wide"><h3>Monthly Trend — Last 12 Months</h3><div id="chart-monthly"></div></div>
+        <div class="chart-card"><h3>Warranty Status</h3><div id="chart-warranty"></div></div>
+        <div class="chart-card"><h3>Issue Confirmation</h3><div id="chart-confirm"></div></div>
+        <div class="chart-card chart-wide"><h3>Top Models (up to 15)</h3><div id="chart-models"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SETTINGS ==================== -->
+  <section id="section-settings" class="section">
+    <div class="section-header">
+      <button class="btn btn-ghost back-btn" onclick="App.showSection('dashboard')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>Back
+      </button>
+      <h2>Settings</h2>
+    </div>
+    <div class="settings-grid">
+      <div class="settings-card">
+        <h3>Google Account Connection</h3>
+        <p class="settings-desc">Enter your Google OAuth Client ID. See <strong>SETUP-WEB.md</strong> for instructions.</p>
+        <div class="form-group">
+          <label for="s-client-id">Google OAuth Client ID</label>
+          <input type="text" id="s-client-id" class="form-input" placeholder="xxxx.apps.googleusercontent.com">
+          <span class="form-hint">Not a secret — identifies your app to Google, not your password or data.</span>
+        </div>
+        <button class="btn btn-primary" onclick="App.saveSettings()">Save &amp; Reload</button>
+      </div>
+      <div class="settings-card">
+        <h3>Spreadsheet Settings</h3>
+        <p class="settings-desc">Rename downloads or save a named copy for archiving / duplicate versions.</p>
+        <div class="form-group">
+          <label for="s-excel-name">Download Filename</label>
+          <div class="inline-row">
+            <input type="text" id="s-excel-name" class="form-input" placeholder="RMA_Log.xlsx">
+            <button class="btn btn-secondary" onclick="App.saveExcelName()">Apply</button>
+          </div>
+          <span class="form-hint">Must end in .xlsx. Used next time you click Download Excel.</span>
+        </div>
+        <hr class="section-divider">
+        <div class="form-group">
+          <label for="s-copy-name">Download a Copy As...</label>
+          <div class="inline-row">
+            <input type="text" id="s-copy-name" class="form-input" placeholder="RMA_Log_2024_Archive.xlsx">
+            <button class="btn btn-secondary" onclick="App.saveCopyAs()">Download Copy</button>
+          </div>
+          <span class="form-hint">Downloads a snapshot of current data with this name. Your main log is unchanged.</span>
+        </div>
+      </div>
+      <div class="settings-card">
+        <h3>How Files Work (Web Version)</h3>
+        <ul class="about-list">
+          <li><strong>PDFs</strong>: stored in-app → open an entry → tap <strong>Download</strong></li>
+          <li><strong>Excel</strong>: click <strong>Download Excel</strong> on the dashboard</li>
+          <li>On <strong>iPad</strong>: files land in your <strong>Files app</strong></li>
+          <li>Data is stored in this browser — persists between sessions automatically</li>
+          <li>Data does not sync between devices — use the Excel download as your portable record</li>
+        </ul>
+        <button class="btn btn-danger-ghost" onclick="App.confirmClearData()">Clear All Local Data</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ==================== EDIT MODAL ==================== -->
+<div id="edit-modal" class="modal-overlay" style="display:none" onclick="App.closeModalOnBackdrop(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">RMA #</h2>
+      <button class="modal-close" onclick="App.closeModal()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="m-id">
+      <div class="modal-section"><h4>Case Status</h4>
+        <div class="status-toggle-wrap">
+          <label class="status-toggle"><input type="checkbox" id="m-status-toggle" onchange="App.onStatusToggle(this)"><span class="toggle-slider"></span></label>
+          <span id="m-status-label" class="status-label-text">Open</span>
+        </div>
+      </div>
+      <div class="modal-section"><h4>Core Information</h4>
+        <div class="form-grid">
+          <div class="form-group"><label>RMA #</label><input type="text" id="m-rma" class="form-input" readonly></div>
+          <div class="form-group"><label>Date Received</label><input type="date" id="m-date" class="form-input"></div>
+          <div class="form-group full-width"><label>Dealer</label><input type="text" id="m-dealer" class="form-input"></div>
+        </div>
+      </div>
+      <div class="modal-section"><h4>Product Information</h4>
+        <div class="form-grid">
+          <div class="form-group"><label>Make / Brand</label><input type="text" id="m-make" class="form-input"></div>
+          <div class="form-group"><label>Model</label><input type="text" id="m-model" class="form-input"></div>
+          <div class="form-group"><label>Serial #</label><input type="text" id="m-serial" class="form-input" placeholder="If available"></div>
+          <div class="form-group"><label>Warranty</label>
+            <select id="m-warranty" class="form-input"><option value="">— Unknown —</option><option value="Yes">Yes</option><option value="No">No</option></select>
+          </div>
+        </div>
+        <div class="form-group full-width"><label>Description of Issue</label><textarea id="m-issue" class="form-input form-textarea" rows="3"></textarea></div>
+        <div class="form-group"><label>Issue Confirmed?</label>
+          <select id="m-confirmed" class="form-input"><option value="">-- Pending --</option><option value="Yes">Yes</option><option value="No">No</option></select>
+        </div>
+      </div>
+      <div class="modal-section"><h4>Resolution</h4>
+        <div class="form-grid">
+          <div class="form-group full-width"><label>Course of Action</label><textarea id="m-action" class="form-input form-textarea" rows="2"></textarea></div>
+          <div class="form-group"><label>Date of Resolution</label><input type="date" id="m-resolved-date" class="form-input"></div>
+          <div class="form-group full-width"><label>How Resolved</label><textarea id="m-resolved-how" class="form-input form-textarea" rows="2"></textarea></div>
+        </div>
+      </div>
+      <div class="modal-section"><h4>Notes</h4>
+        <div class="form-group full-width"><textarea id="m-notes" class="form-input form-textarea" rows="3" placeholder="Additional notes..."></textarea></div>
+      </div>
+      <div class="modal-section"><h4>Attached PDFs</h4>
+        <div id="m-files" class="files-list"><p class="no-files">Loading...</p></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
+      <button class="btn btn-danger-ghost" onclick="App.deleteEntry()">Delete Entry</button>
+      <button class="btn btn-primary" onclick="App.saveEntry()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<!-- Auth uses PKCE (built-in Web Crypto API) — no external auth library needed -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="config.js"></script>
+<script src="storage.js"></script>
+<script src="auth.js"></script>
+<script src="email.js"></script>
+<script src="pdf-parser.js"></script>
+<script src="excel.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
