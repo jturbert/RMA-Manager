@@ -730,6 +730,50 @@ const App = (() => {
   }
 
   // ============================================================
+  // BACKUP & RESTORE
+  // ============================================================
+  async function exportBackup() {
+    try {
+      showToast('Preparing backup…');
+      const result = await Storage.exportBackup();
+      showToast(
+        `Backup downloaded — ${result.entryCount} entries, ${result.pdfCount} PDF(s).`,
+        'success'
+      );
+    } catch (err) {
+      showToast('Backup failed: ' + err.message, 'error');
+    }
+  }
+
+  async function importBackup() {
+    const input = document.getElementById('backup-file-input');
+    const file  = input.files[0];
+    if (!file) { showToast('Please choose a backup file first.', 'error'); return; }
+
+    const existing = await Storage.getAllEntries();
+    const warning  = existing.length
+      ? `Restore from backup?\n\nThis will REPLACE all current data (${existing.length} entr${existing.length === 1 ? 'y' : 'ies'}) with the contents of the backup file.\n\nThis cannot be undone.`
+      : 'Import this backup?\n\nAll entries and PDFs in the backup file will be restored.';
+    if (!confirm(warning)) { input.value = ''; return; }
+
+    try {
+      showToast('Restoring…');
+      const text   = await file.text();
+      const result = await Storage.importBackup(text);
+      input.value  = '';
+      allEntries   = [];
+      await refreshTable();
+      const dateStr = result.exportedAt ? ` (backed up ${result.exportedAt.split('T')[0]})` : '';
+      showToast(
+        `Restored ${result.entryCount} entries and ${result.pdfCount} PDF(s)${dateStr}.`,
+        'success'
+      );
+    } catch (err) {
+      showToast('Restore failed: ' + err.message, 'error');
+    }
+  }
+
+  // ============================================================
   // EXCEL EXPORT (always a browser download in the web version)
   // ============================================================
   async function exportExcel() {
@@ -783,6 +827,7 @@ const App = (() => {
     fetchEmails, showSection, setFilter, onSearch, sortBy,
     openModal, closeModal, closeModalOnBackdrop, onStatusToggle,
     saveEntry, deleteEntry, downloadPDF,
-    exportExcel
+    exportExcel,
+    exportBackup, importBackup
   };
 })();

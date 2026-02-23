@@ -115,10 +115,117 @@ const Storage = (() => {
     });
   }
 
+  // ---- Backup & Restore ----
+
+  // Convert ArrayBuffer → base64 string (chunked to avoid call-stack limits on large PDFs)
+  function _ab2b64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary  = '';
+    const chunk = 8192;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  // Convert base64 string → ArrayBuffer
+  function _b642ab(base64) {
+    const binary = atob(base64);
+    const buf    = new ArrayBuffer(binary.length);
+    const bytes  = new Uint8Array(buf);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return buf;
+  }
+
+  async function exportBackup() {
+    const entries  = await idbGetAll('entries');
+    const settings = await idbGetAll('settings');
+    const rawPdfs  = await idbGetAll('pdfs');
+
+    // Encode PDF ArrayBuffers as base64 so the whole backup is plain JSON
+    const pdfs = rawPdfs.map(p => ({ ...p, data: _ab2b64(p.data) }));
+
+    const backup = {
+      version:    1,
+      exportedAt: new Date().toISOString(),
+      entries,
+      settings,
+      pdfs
+    };
+
+    const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const date = new Date().toISOString().split('T')[0];
+    a.href     = url;
+    a.download = `RMA-Backup-${date}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+    return { entryCount: entries.length, pdfCount: pdfs.length };
+  }
+
+  async function importBackup(jsonText) {
+    let backup;
+    try { backup = JSON.parse(jsonText); }
+    catch (_) { throw new Error('Invalid backup file — could not parse JSON.'); }
+
+    if (!backup.version || !Array.isArray(backup.entries)) {
+      throw new Error('Invalid backup file — missing required fields.');
+    }
+
+    // Wipe existing data, then restore with original IDs preserved
+    // (IDs are kept so that PDF → entry links remain valid)
+    await clearAllData();
+
+    const d = await openDB();
+
+    // Restore entries (original IDs preserved via put())
+    await new Promise((res, rej) => {
+      const tx = d.transaction('entries', 'readwrite');
+      const st = tx.objectStore('entries');
+      for (const entry of backup.entries) st.put(entry);
+      tx.oncomplete = res;
+      tx.onerror    = () => rej(tx.error);
+    });
+
+    // Restore settings
+    if (Array.isArray(backup.settings) && backup.settings.length) {
+      await new Promise((res, rej) => {
+        const tx = d.transaction('settings', 'readwrite');
+        const st = tx.objectStore('settings');
+        for (const s of backup.settings) st.put(s);
+        tx.oncomplete = res;
+        tx.onerror    = () => rej(tx.error);
+      });
+    }
+
+    // Restore PDFs (decode base64 → ArrayBuffer)
+    if (Array.isArray(backup.pdfs) && backup.pdfs.length) {
+      await new Promise((res, rej) => {
+        const tx = d.transaction('pdfs', 'readwrite');
+        const st = tx.objectStore('pdfs');
+        for (const pdf of backup.pdfs) {
+          st.put({ ...pdf, data: _b642ab(pdf.data) });
+        }
+        tx.oncomplete = res;
+        tx.onerror    = () => rej(tx.error);
+      });
+    }
+
+    return {
+      entryCount: backup.entries.length,
+      pdfCount:   (backup.pdfs || []).length,
+      exportedAt: backup.exportedAt || null
+    };
+  }
+
   return {
     saveEntry, getEntry, deleteEntry, getAllEntries, entryExistsByEmailId, entryByEmailId,
     getSetting, setSetting,
     savePDF, getPDFsForEntry, downloadPDF, buildFilename,
-    clearAllData
+    clearAllData, exportBackup, importBackup
   };
 })();

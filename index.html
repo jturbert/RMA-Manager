@@ -180,6 +180,27 @@
         </div>
       </div>
       <div class="settings-card">
+        <h3>Backup &amp; Restore</h3>
+        <p class="settings-desc">Download a full backup of all RMA entries, settings, and stored PDFs. Use it to move data to another browser or device, or just as a safety net.</p>
+        <div class="form-group">
+          <label>Export Backup</label>
+          <button class="btn btn-secondary" onclick="App.exportBackup()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download Backup
+          </button>
+          <span class="form-hint">Saves all entries and PDFs to a single <code>.json</code> file.</span>
+        </div>
+        <hr class="section-divider">
+        <div class="form-group">
+          <label for="backup-file-input">Restore from Backup</label>
+          <div class="inline-row">
+            <input type="file" id="backup-file-input" accept=".json" class="form-input">
+            <button class="btn btn-secondary" onclick="App.importBackup()">Restore</button>
+          </div>
+          <span class="form-hint">Warning: this replaces all current data with the backup file.</span>
+        </div>
+      </div>
+      <div class="settings-card">
         <h3>How Files Work (Web Version)</h3>
         <ul class="about-list">
           <li><strong>PDFs</strong>: stored in-app → open an entry → tap <strong>Download</strong></li>
