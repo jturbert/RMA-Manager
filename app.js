@@ -59,10 +59,11 @@ const App = (() => {
   }
 
   // Callback fired by auth.js after the Google popup completes successfully
-  function onAuthComplete(userInfo) {
+  async function onAuthComplete(userInfo) {
     updateAuthUI(userInfo);
     document.getElementById('fetch-btn').disabled = false;
     showToast('Signed in as ' + (userInfo?.email || userInfo?.name || 'Google user'), 'success');
+    await syncFromDrive();
   }
 
   // Called by auth.js if sign-in fails
@@ -120,12 +121,109 @@ const App = (() => {
   }
 
   async function confirmClearData() {
-    if (!confirm('Delete ALL local RMA entries, stored PDFs and settings in this browser?\n\nThis cannot be undone.')) return;
+    if (!confirm(
+      'Delete ALL local RMA entries, stored PDFs and settings in this browser?\n\n' +
+      'Cloud-synced entries will be restored next time you sign in.\n\n' +
+      'This cannot be undone.'
+    )) return;
     await Storage.clearAllData();
     allEntries = [];
     renderTable([]);
     updateStats([]);
+    showSyncStatus('off');
     showToast('All local data cleared.', 'success');
+  }
+
+  // ============================================================
+  // CLOUD SYNC (Google Drive App Data)
+  // ============================================================
+
+  // Update the cloud-sync indicator icon in the header.
+  // state: 'syncing' | 'synced' | 'error' | 'off'
+  function showSyncStatus(state, tooltip) {
+    const el = document.getElementById('sync-indicator');
+    if (!el) return;
+    el.style.display = state === 'off' ? 'none' : 'inline-flex';
+    el.title = tooltip ||
+      (state === 'syncing' ? 'Syncing with Google Drive…'  :
+       state === 'synced'  ? 'Synced with Google Drive'    :
+       state === 'error'   ? 'Cloud sync failed — data saved locally' : '');
+    el.className = 'sync-indicator sync-' + state;
+  }
+
+  // Load entries from Drive and merge into local IndexedDB.
+  // Drive is authoritative: local entries are updated from Drive,
+  // and local entries deleted on another device are removed here.
+  // PDFs are untouched (they live only in IndexedDB).
+  async function syncFromDrive() {
+    if (!Auth.isSignedIn()) return;
+    showSyncStatus('syncing');
+    try {
+      const driveEntries = await DriveStore.loadEntries();
+
+      if (!driveEntries) {
+        // No Drive file yet — push local data to create it
+        await pushToDrive(false);
+        return;
+      }
+
+      const localEntries  = await Storage.getAllEntries();
+      const localByEmail  = new Map(localEntries.map(e => [e.emailId, e]));
+      const driveByEmail  = new Map(driveEntries.map(e => [e.emailId, e]));
+
+      // Update / add entries from Drive
+      for (const driveEntry of driveEntries) {
+        const local = localByEmail.get(driveEntry.emailId);
+        if (local) {
+          // Overwrite local fields with Drive values but keep the local id
+          // so existing PDF links (by entryId) remain intact
+          await Storage.saveEntry({ ...driveEntry, id: local.id });
+        } else {
+          // Entry exists on Drive but not locally — add it
+          // Strip the id so IndexedDB assigns a fresh local one
+          const { id: _ignored, ...rest } = driveEntry;
+          await Storage.saveEntry(rest);
+        }
+      }
+
+      // Remove local entries that were deleted on another device
+      for (const local of localEntries) {
+        if (local.emailId && !driveByEmail.has(local.emailId)) {
+          await Storage.deleteEntry(local.id);
+        }
+      }
+
+      await refreshTable();
+      showSyncStatus('synced');
+    } catch (err) {
+      console.warn('[Drive] Sync from Drive failed:', err.message);
+      const needsReauth = err.message.includes('401') || err.message.includes('403');
+      showSyncStatus('error',
+        needsReauth
+          ? 'Sign out and back in to enable cloud sync'
+          : 'Cloud sync failed — data saved locally'
+      );
+    }
+  }
+
+  // Push all local entries to Drive (called after any change).
+  // silent=true suppresses the syncing spinner (used during fetch progress)
+  async function pushToDrive(showIndicator = true) {
+    if (!Auth.isSignedIn()) return;
+    if (showIndicator) showSyncStatus('syncing');
+    try {
+      const entries = await Storage.getAllEntries();
+      await DriveStore.saveEntries(entries);
+      showSyncStatus('synced');
+    } catch (err) {
+      console.warn('[Drive] Push to Drive failed:', err.message);
+      const needsReauth = err.message.includes('401') || err.message.includes('403');
+      showSyncStatus('error',
+        needsReauth
+          ? 'Sign out and back in to enable cloud sync'
+          : 'Cloud sync failed — data saved locally'
+      );
+    }
   }
 
   // ============================================================
@@ -227,6 +325,7 @@ const App = (() => {
       if (dateFixed)   parts.push(`${dateFixed} date(s) corrected`);
       showToast((parts.join(', ') || 'No changes') + '.', 'success');
       await refreshTable();
+      await pushToDrive();
 
     } catch (err) {
       console.error('[App] Fetch error:', err);
@@ -718,6 +817,7 @@ const App = (() => {
     closeModal();
     showToast('Saved.', 'success');
     await refreshTable();
+    await pushToDrive();
   }
 
   async function deleteEntry() {
@@ -727,6 +827,7 @@ const App = (() => {
     closeModal();
     showToast('Entry deleted.');
     await refreshTable();
+    await pushToDrive();
   }
 
   // ============================================================
@@ -799,6 +900,7 @@ const App = (() => {
         `Restored ${result.entryCount} entries and ${result.pdfCount} PDF(s)${dateStr}.`,
         'success'
       );
+      await pushToDrive();
     } catch (err) {
       showToast('Restore failed: ' + err.message, 'error');
     }

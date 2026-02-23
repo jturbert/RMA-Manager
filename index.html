@@ -26,6 +26,21 @@
       <button class="nav-btn" onclick="App.showSection('stats',this)">Statistics</button>
     </nav>
     <span id="user-name" class="user-name"></span>
+    <span id="sync-indicator" class="sync-indicator" style="display:none" title="Cloud sync status">
+      <!-- syncing state -->
+      <svg class="sync-icon-syncing" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      <!-- synced state -->
+      <svg class="sync-icon-synced" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      <!-- error state -->
+      <svg class="sync-icon-error" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    </span>
     <button id="auth-btn" class="btn btn-primary" onclick="App.handleAuthClick()">Sign In with Google</button>
     <button class="btn btn-ghost" onclick="App.showSection('settings')" title="Settings">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -290,6 +305,7 @@
 <script src="config.js"></script>
 <script src="storage.js"></script>
 <script src="auth.js"></script>
+<script src="drive.js"></script>
 <script src="email.js"></script>
 <script src="pdf-parser.js"></script>
 <script src="excel.js"></script>

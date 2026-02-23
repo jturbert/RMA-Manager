@@ -786,3 +786,33 @@ body {
   .rma-table td { padding:12px 14px; }
   .search-input { padding:10px 12px 10px 36px; }
 }
+
+/* ---- Cloud sync indicator ---- */
+.sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: default;
+  transition: background 0.3s;
+}
+/* Show only the relevant icon for each state */
+.sync-indicator .sync-icon-syncing,
+.sync-indicator .sync-icon-synced,
+.sync-indicator .sync-icon-error { display: none; }
+
+.sync-syncing { background: #f1f5f9; }
+.sync-syncing .sync-icon-syncing {
+  display: block;
+  color: #94a3b8;
+  animation: spin 1.2s linear infinite;
+}
+.sync-synced { background: #f0fdf4; }
+.sync-synced .sync-icon-synced { display: block; color: #16a34a; }
+
+.sync-error { background: #fff7ed; }
+.sync-error .sync-icon-error { display: block; color: #ea580c; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
