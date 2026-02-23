@@ -732,16 +732,47 @@ const App = (() => {
   // ============================================================
   // BACKUP & RESTORE
   // ============================================================
+  let _backupRevokeTimer = null;
+
   async function exportBackup() {
+    const exportBtn = document.getElementById('backup-export-btn');
+    const readyDiv  = document.getElementById('backup-ready-link');
+    const anchor    = document.getElementById('backup-dl-anchor');
     try {
+      if (exportBtn) exportBtn.disabled = true;
       showToast('Preparing backup…');
+
       const result = await Storage.exportBackup();
+
+      // ── Tappable link (guaranteed to work on iOS Safari) ──────────────────
+      if (anchor && readyDiv) {
+        anchor.href     = result.url;
+        anchor.download = result.filename;
+        readyDiv.style.display = 'flex';
+        // Revoke the blob URL after 5 minutes to free memory
+        if (_backupRevokeTimer) clearTimeout(_backupRevokeTimer);
+        _backupRevokeTimer = setTimeout(() => {
+          URL.revokeObjectURL(result.url);
+          if (readyDiv) readyDiv.style.display = 'none';
+        }, 300000);
+      }
+
+      // ── Also attempt auto-download for desktop browsers ───────────────────
+      // (This is blocked on iOS Safari after async ops, hence the link above)
+      try {
+        const a = document.createElement('a');
+        a.href = result.url; a.download = result.filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      } catch (_) { /* silent — user can tap the link instead */ }
+
       showToast(
-        `Backup downloaded — ${result.entryCount} entries, ${result.pdfCount} PDF(s).`,
+        `Backup ready — ${result.entryCount} entries, ${result.pdfCount} PDF(s).`,
         'success'
       );
     } catch (err) {
       showToast('Backup failed: ' + err.message, 'error');
+    } finally {
+      if (exportBtn) exportBtn.disabled = false;
     }
   }
 

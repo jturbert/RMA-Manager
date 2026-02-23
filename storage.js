@@ -153,18 +153,13 @@ const Storage = (() => {
       pdfs
     };
 
-    const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    const date = new Date().toISOString().split('T')[0];
-    a.href     = url;
-    a.download = `RMA-Backup-${date}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    const blob     = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+    const url      = URL.createObjectURL(blob);
+    const date     = new Date().toISOString().split('T')[0];
+    const filename = `RMA-Backup-${date}.json`;
 
-    return { entryCount: entries.length, pdfCount: pdfs.length };
+    // Return the URL for the caller to present — avoids async-click issues on Safari/iOS
+    return { url, filename, entryCount: entries.length, pdfCount: pdfs.length };
   }
 
   async function importBackup(jsonText) {

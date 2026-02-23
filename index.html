@@ -184,10 +184,18 @@
         <p class="settings-desc">Download a full backup of all RMA entries, settings, and stored PDFs. Use it to move data to another browser or device, or just as a safety net.</p>
         <div class="form-group">
           <label>Export Backup</label>
-          <button class="btn btn-secondary" onclick="App.exportBackup()">
+          <button id="backup-export-btn" class="btn btn-secondary" onclick="App.exportBackup()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Download Backup
           </button>
+          <div id="backup-ready-link" style="display:none;align-items:center;gap:10px;margin-top:8px;padding:10px 12px;background:var(--green-faint,#f0fdf4);border:1px solid var(--green,#16a34a);border-radius:8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <span style="font-size:0.85rem;color:#15803d">Backup ready —</span>
+            <a id="backup-dl-anchor" class="btn btn-primary btn-sm" style="font-size:0.82rem">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Tap to Save
+            </a>
+          </div>
           <span class="form-hint">Saves all entries and PDFs to a single <code>.json</code> file.</span>
         </div>
         <hr class="section-divider">
