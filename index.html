@@ -226,11 +226,11 @@
       <div class="settings-card">
         <h3>How Files Work (Web Version)</h3>
         <ul class="about-list">
-          <li><strong>PDFs</strong>: stored in-app → open an entry → tap <strong>Download</strong></li>
+          <li><strong>Cloud sync</strong>: RMA entries sync automatically via Google Drive — sign in on any device to get your latest data</li>
+          <li><strong>PDFs</strong>: stored locally in this browser → open an entry → tap <strong>Download</strong></li>
           <li><strong>Excel</strong>: click <strong>Download Excel</strong> on the dashboard</li>
           <li>On <strong>iPad</strong>: files land in your <strong>Files app</strong></li>
-          <li>Data is stored in this browser — persists between sessions automatically</li>
-          <li>Data does not sync between devices — use the Excel download as your portable record</li>
+          <li>PDFs are local to each browser — use <strong>Fetch New Emails</strong> to re-download them on a new device</li>
         </ul>
         <button class="btn btn-danger-ghost" onclick="App.confirmClearData()">Clear All Local Data</button>
       </div>
@@ -287,6 +287,15 @@
       </div>
       <div class="modal-section"><h4>Attached PDFs</h4>
         <div id="m-files" class="files-list"><p class="no-files">Loading...</p></div>
+        <div style="margin-top:8px">
+          <input type="file" id="m-pdf-upload" accept=".pdf" style="display:none" onchange="App.uploadInvoicePDF(this)">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('m-pdf-upload').click()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add Invoice PDF
+          </button>
+        </div>
       </div>
     </div>
     <div class="modal-footer">

@@ -1,13 +1,12 @@
 // ============================================================
 // RMA Manager (Web) — Google Drive Cloud Sync
 //
-// Stores RMA entries in the user's Google Drive App Data folder.
-// This is a private, hidden folder that only this app can access —
-// it does not appear anywhere in the user's regular Drive UI.
+// Stores RMA entries AND PDF files in the user's Google Drive
+// App Data folder. This is a private, hidden folder that only
+// this app can access — it does not appear in the user's Drive UI.
 //
-// Only RMA entry records are synced. PDFs remain in IndexedDB
-// (local to each browser) and can be re-fetched from Gmail at
-// any time using Fetch New Emails.
+// Entry records are stored in a single JSON file.
+// Each PDF is stored as a separate binary file in the same folder.
 // ============================================================
 
 const DriveStore = (() => {
@@ -42,7 +41,7 @@ const DriveStore = (() => {
 
   // ---- Public API ----
 
-  // Download and return the stored entries array from Drive.
+  // Download and return { entries, pdfMeta } from Drive.
   // Returns null if no file exists yet or on error.
   async function loadEntries() {
     const id = await _findFile();
@@ -53,16 +52,22 @@ const DriveStore = (() => {
     if (!res.ok) return null;
 
     const data = await res.json();
-    return Array.isArray(data.entries) ? data.entries : null;
+    if (!Array.isArray(data.entries)) return null;
+
+    return {
+      entries: data.entries,
+      pdfMeta: Array.isArray(data.pdfMeta) ? data.pdfMeta : []
+    };
   }
 
-  // Upload/overwrite the entries file on Drive.
-  async function saveEntries(entries) {
+  // Upload/overwrite the entries+pdfMeta file on Drive.
+  async function saveEntries(entries, pdfMeta = []) {
     const h    = await _authHeader();
     const body = JSON.stringify({
-      version: 1,
+      version: 2,
       savedAt: new Date().toISOString(),
-      entries
+      entries,
+      pdfMeta
     });
 
     const id = await _findFile();
@@ -102,5 +107,48 @@ const DriveStore = (() => {
     }
   }
 
-  return { loadEntries, saveEntries };
+  // Upload a PDF file to Drive appDataFolder. Returns the Drive file ID.
+  async function savePDF(filename, arrayBuffer) {
+    const h    = await _authHeader();
+    const form = new FormData();
+    form.append('metadata', new Blob(
+      [JSON.stringify({ name: filename, parents: ['appDataFolder'] })],
+      { type: 'application/json' }
+    ));
+    form.append('file', new Blob([arrayBuffer], { type: 'application/pdf' }));
+
+    const res = await fetch(`${UPLOAD_API}?uploadType=multipart`, {
+      method:  'POST',
+      headers: h,
+      body:    form
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Drive PDF upload failed: ${res.status} ${err.error?.message || ''}`);
+    }
+    const data = await res.json();
+    return data.id;
+  }
+
+  // Download a PDF from Drive by its file ID. Returns an ArrayBuffer.
+  async function loadPDF(driveFileId) {
+    const h   = await _authHeader();
+    const res = await fetch(`${FILES_API}/${driveFileId}?alt=media`, { headers: h });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Drive PDF load failed: ${res.status} ${err.error?.message || ''}`);
+    }
+    return res.arrayBuffer();
+  }
+
+  // Delete a PDF from Drive. Non-fatal — logs a warning on failure.
+  async function deletePDF(driveFileId) {
+    const h   = await _authHeader();
+    const res = await fetch(`${FILES_API}/${driveFileId}`, { method: 'DELETE', headers: h });
+    if (!res.ok && res.status !== 404) {
+      console.warn('[Drive] PDF delete returned:', res.status);
+    }
+  }
+
+  return { loadEntries, saveEntries, savePDF, loadPDF, deletePDF };
 })();

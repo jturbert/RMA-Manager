@@ -15,6 +15,7 @@ const App = (() => {
   let sortAsc       = false;
   let editingId     = null;
   let editingPDFs   = [];   // PDF records for the currently-open modal entry
+  let drivePdfMeta  = [];   // PDF metadata array from Drive (populated on syncFromDrive)
 
   // ============================================================
   // INIT
@@ -37,6 +38,10 @@ const App = (() => {
     updateAuthUI(account);
 
     await refreshTable();
+
+    // If a session was restored from cache (no sign-in popup needed), sync now.
+    // When the user signs in fresh, onAuthComplete handles this instead.
+    if (account) await syncFromDrive();
   }
 
   // ============================================================
@@ -151,6 +156,80 @@ const App = (() => {
     el.className = 'sync-indicator sync-' + state;
   }
 
+  // ---- Drive PDF Helpers ----
+
+  // Build the pdfMeta array to store in Drive alongside entry records.
+  // Merges locally-uploaded PDFs (that have a driveFileId) with any
+  // Drive-only entries from the last sync, so no device accidentally
+  // removes another device's PDF references when it pushes.
+  async function buildPdfMeta() {
+    const allPDFs    = await Storage.getAllPDFs();
+    const allEntries = await Storage.getAllEntries();
+    const entryById  = new Map(allEntries.map(e => [e.id, e]));
+
+    const localMeta = allPDFs
+      .filter(p => p.driveFileId)
+      .map(p => {
+        const entry = entryById.get(p.entryId);
+        return {
+          driveFileId:  p.driveFileId,
+          filename:     p.filename,
+          entryEmailId: entry?.emailId || null,
+          type:         p.type,
+          savedAt:      p.savedAt
+        };
+      })
+      .filter(m => m.entryEmailId);
+
+    // Preserve Drive-only entries from other devices that aren't local yet
+    const localDriveIds = new Set(localMeta.map(m => m.driveFileId));
+    const driveOnly = drivePdfMeta.filter(m => !localDriveIds.has(m.driveFileId));
+
+    return [...localMeta, ...driveOnly];
+  }
+
+  // Upload all local PDFs that don't yet have a Drive file ID.
+  // Called after fetchEmails and after a manual invoice PDF is added.
+  async function uploadPendingPDFs() {
+    if (!Auth.isSignedIn()) return;
+    const allPDFs = await Storage.getAllPDFs();
+    const pending = allPDFs.filter(p => !p.driveFileId);
+    for (const pdf of pending) {
+      try {
+        const driveFileId = await DriveStore.savePDF(pdf.filename, pdf.data);
+        await Storage.updatePDFDriveId(pdf.id, driveFileId);
+      } catch (err) {
+        console.warn('[Drive] PDF upload failed:', pdf.filename, err.message);
+      }
+    }
+  }
+
+  // Download any Drive PDFs for this entry that aren't yet stored locally.
+  // Called lazily when the edit modal is opened.
+  async function syncMissingPDFsForEntry(entryId, localPDFs) {
+    if (!Auth.isSignedIn() || !drivePdfMeta.length) return;
+    const entry = await Storage.getEntry(entryId);
+    if (!entry?.emailId) return;
+
+    const localDriveIds  = new Set(localPDFs.filter(p => p.driveFileId).map(p => p.driveFileId));
+    const localFilenames = new Set(localPDFs.map(p => p.filename));
+
+    const toDownload = drivePdfMeta.filter(m =>
+      m.entryEmailId === entry.emailId &&
+      !localDriveIds.has(m.driveFileId) &&
+      !localFilenames.has(m.filename)
+    );
+
+    for (const meta of toDownload) {
+      try {
+        const buffer = await DriveStore.loadPDF(meta.driveFileId);
+        await Storage.savePDF(entryId, meta.filename, buffer, meta.type, meta.driveFileId);
+      } catch (err) {
+        console.warn('[Drive] Could not download PDF from Drive:', meta.filename, err.message);
+      }
+    }
+  }
+
   // Load entries from Drive and merge into local IndexedDB.
   // Drive is authoritative: local entries are updated from Drive,
   // and local entries deleted on another device are removed here.
@@ -159,13 +238,16 @@ const App = (() => {
     if (!Auth.isSignedIn()) return;
     showSyncStatus('syncing');
     try {
-      const driveEntries = await DriveStore.loadEntries();
+      const driveData = await DriveStore.loadEntries();
 
-      if (!driveEntries) {
+      if (!driveData) {
         // No Drive file yet — push local data to create it
         await pushToDrive(false);
         return;
       }
+
+      const { entries: driveEntries, pdfMeta } = driveData;
+      drivePdfMeta = pdfMeta;   // cache for lazy PDF downloads when modal is opened
 
       const localEntries  = await Storage.getAllEntries();
       const localByEmail  = new Map(localEntries.map(e => [e.emailId, e]));
@@ -198,31 +280,32 @@ const App = (() => {
     } catch (err) {
       console.warn('[Drive] Sync from Drive failed:', err.message);
       const needsReauth = err.message.includes('401') || err.message.includes('403');
-      showSyncStatus('error',
-        needsReauth
-          ? 'Sign out and back in to enable cloud sync'
-          : 'Cloud sync failed — data saved locally'
-      );
+      const msg = needsReauth
+        ? 'Drive sync: sign out and back in to grant Drive access.'
+        : 'Drive sync failed — working from local data. (' + err.message + ')';
+      showSyncStatus('error', msg);
+      showToast(msg, 'error');
     }
   }
 
   // Push all local entries to Drive (called after any change).
-  // silent=true suppresses the syncing spinner (used during fetch progress)
   async function pushToDrive(showIndicator = true) {
     if (!Auth.isSignedIn()) return;
     if (showIndicator) showSyncStatus('syncing');
     try {
       const entries = await Storage.getAllEntries();
-      await DriveStore.saveEntries(entries);
+      const pdfMeta = await buildPdfMeta();
+      await DriveStore.saveEntries(entries, pdfMeta);
       showSyncStatus('synced');
     } catch (err) {
       console.warn('[Drive] Push to Drive failed:', err.message);
       const needsReauth = err.message.includes('401') || err.message.includes('403');
-      showSyncStatus('error',
-        needsReauth
-          ? 'Sign out and back in to enable cloud sync'
-          : 'Cloud sync failed — data saved locally'
-      );
+      const msg = needsReauth
+        ? 'Drive sync: sign out and back in to grant Drive access.'
+        : 'Drive sync failed — change saved locally only.';
+      showSyncStatus('error', msg);
+      // Only toast on reauth issues (avoid toasting on every save if Drive is unreachable)
+      if (needsReauth) showToast(msg, 'error');
     }
   }
 
@@ -325,6 +408,7 @@ const App = (() => {
       if (dateFixed)   parts.push(`${dateFixed} date(s) corrected`);
       showToast((parts.join(', ') || 'No changes') + '.', 'success');
       await refreshTable();
+      await uploadPendingPDFs();
       await pushToDrive();
 
     } catch (err) {
@@ -748,29 +832,11 @@ const App = (() => {
     toggle.checked = entry.status === 'Closed';
     document.getElementById('m-status-label').textContent = entry.status || 'Open';
 
-    // Load PDFs from IndexedDB and render download buttons
+    // Load PDFs from IndexedDB; download any missing Drive PDFs, then render
     editingPDFs = await Storage.getPDFsForEntry(id);
-    const filesEl = document.getElementById('m-files');
-    if (editingPDFs.length) {
-      filesEl.innerHTML = editingPDFs.map((pdf, idx) => `
-        <div class="file-item">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <span class="file-name">${esc(pdf.filename)}</span>
-          <span class="file-type-badge ${pdf.type==='invoice'?'file-type-inv':'file-type-rma'}">${pdf.type==='invoice'?'Invoice':'RMA Form'}</span>
-          <button class="btn btn-secondary btn-sm" onclick="App.downloadPDF(${idx})">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Download
-          </button>
-        </div>`).join('');
-    } else {
-      filesEl.innerHTML = '<p class="no-files">No PDF attachments stored for this entry.</p>';
-    }
+    await syncMissingPDFsForEntry(id, editingPDFs);
+    editingPDFs = await Storage.getPDFsForEntry(id);   // re-fetch after potential downloads
+    renderModalFileList();
 
     document.getElementById('edit-modal').style.display = 'flex';
     document.body.style.overflow = 'hidden';
@@ -782,6 +848,57 @@ const App = (() => {
     if (!pdf) return;
     Storage.downloadPDF(pdf);
     showToast('Downloading: ' + pdf.filename);
+  }
+
+  function renderModalFileList() {
+    const filesEl = document.getElementById('m-files');
+    if (editingPDFs.length) {
+      filesEl.innerHTML = editingPDFs.map((pdf, idx) => `
+        <div class="file-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span class="file-name">${esc(pdf.filename)}</span>
+          <span class="file-type-badge ${pdf.type==='invoice'?'file-type-inv':'file-type-rma'}">${pdf.type==='invoice'?'Invoice':'RMA Form'}</span>
+          ${pdf.driveFileId ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" title="Stored in Google Drive" style="flex-shrink:0"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="App.downloadPDF(${idx})">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download
+          </button>
+        </div>`).join('');
+    } else {
+      filesEl.innerHTML = '<p class="no-files">No PDF attachments stored for this entry.</p>';
+    }
+  }
+
+  async function uploadInvoicePDF(input) {
+    const file = input.files[0];
+    input.value = ''; // reset so the same file can be re-selected if needed
+    if (!file || !editingId) return;
+    try {
+      const buffer = await file.arrayBuffer();
+      const entry  = await Storage.getEntry(editingId);
+      const fname  = Storage.buildFilename(
+        entry.rmaNumber, entry.dealer,
+        entry.model || 'unknown', entry.date, true
+      );
+      await Storage.savePDF(editingId, fname, buffer, 'invoice');
+      editingPDFs = await Storage.getPDFsForEntry(editingId);
+      renderModalFileList();
+      showToast('Invoice PDF saved.', 'success');
+      // Upload to Drive and update pdfMeta in the background (non-blocking)
+      if (Auth.isSignedIn()) {
+        uploadPendingPDFs()
+          .then(() => pushToDrive())
+          .catch(e => console.warn('[Drive] Invoice PDF Drive upload failed:', e.message));
+      }
+    } catch (err) {
+      showToast('Upload failed: ' + err.message, 'error');
+    }
   }
 
   function closeModal() {
@@ -823,6 +940,19 @@ const App = (() => {
   async function deleteEntry() {
     if (!editingId) return;
     if (!confirm('Delete this RMA entry and its stored PDFs?\n\nThis cannot be undone.')) return;
+    // Remove PDF files from Drive before wiping local records
+    if (Auth.isSignedIn()) {
+      const pdfsWithDriveId = editingPDFs.filter(p => p.driveFileId);
+      if (pdfsWithDriveId.length) {
+        const driveIds = new Set(pdfsWithDriveId.map(p => p.driveFileId));
+        drivePdfMeta = drivePdfMeta.filter(m => !driveIds.has(m.driveFileId));
+        for (const pdf of pdfsWithDriveId) {
+          DriveStore.deletePDF(pdf.driveFileId).catch(e =>
+            console.warn('[Drive] PDF delete failed:', e.message)
+          );
+        }
+      }
+    }
     await Storage.deleteEntry(editingId);   // also removes linked PDFs from IndexedDB
     closeModal();
     showToast('Entry deleted.');
@@ -959,7 +1089,7 @@ const App = (() => {
     saveSettings, saveExcelName, saveCopyAs, confirmClearData,
     fetchEmails, showSection, setFilter, onSearch, sortBy,
     openModal, closeModal, closeModalOnBackdrop, onStatusToggle,
-    saveEntry, deleteEntry, downloadPDF,
+    saveEntry, deleteEntry, downloadPDF, uploadInvoicePDF,
     exportExcel,
     exportBackup, importBackup
   };

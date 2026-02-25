@@ -80,9 +80,30 @@ const Storage = (() => {
   const setSetting = (key, val) => idbPut('settings', { key, value: val });
 
   // ---- PDF Storage ----
-  async function savePDF(entryId, filename, arrayBuffer, pdfType) {
-    return idbPut('pdfs', { entryId, filename, type:pdfType, data:arrayBuffer, savedAt:new Date().toISOString() });
+  async function savePDF(entryId, filename, arrayBuffer, pdfType, driveFileId = null) {
+    const rec = { entryId, filename, type: pdfType, data: arrayBuffer, savedAt: new Date().toISOString() };
+    if (driveFileId) rec.driveFileId = driveFileId;
+    return idbPut('pdfs', rec);
   }
+
+  // Update the driveFileId on an existing PDF record after it has been uploaded to Drive.
+  async function updatePDFDriveId(pdfId, driveFileId) {
+    const d = await openDB();
+    return new Promise((res, rej) => {
+      const tx  = d.transaction('pdfs', 'readwrite');
+      const st  = tx.objectStore('pdfs');
+      const req = st.get(pdfId);
+      req.onsuccess = () => {
+        const rec = req.result;
+        if (!rec) { res(); return; }
+        rec.driveFileId = driveFileId;
+        st.put(rec).onsuccess = () => res();
+      };
+      req.onerror = () => rej(req.error);
+    });
+  }
+
+  const getAllPDFs      = ()       => idbGetAll('pdfs');
   const getPDFsForEntry = entryId => idbGetAllByIndex('pdfs','entryId',entryId);
 
   async function downloadPDF(pdfRecord) {
@@ -220,7 +241,7 @@ const Storage = (() => {
   return {
     saveEntry, getEntry, deleteEntry, getAllEntries, entryExistsByEmailId, entryByEmailId,
     getSetting, setSetting,
-    savePDF, getPDFsForEntry, downloadPDF, buildFilename,
+    savePDF, updatePDFDriveId, getAllPDFs, getPDFsForEntry, downloadPDF, buildFilename,
     clearAllData, exportBackup, importBackup
   };
 })();
