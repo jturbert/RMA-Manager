@@ -12,12 +12,9 @@
 
 const CONFIG = {
   // Your Google OAuth 2.0 Client ID
+  // This is safe to commit — it identifies your app but cannot access your data.
+  // You can also set it in the app's Settings panel instead of editing this file.
   googleClientId: '936371678924-57pfmcaob4k8je19nhccsded555b3jkl.apps.googleusercontent.com',
-
-  // Your Google OAuth 2.0 Client Secret
-  // Found in Google Cloud Console → APIs & Services → Credentials → your OAuth client
-  // (Click the pencil ✏️ edit icon — the secret is shown there)
-  googleClientSecret: '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',
 
   // Your GitHub Pages URL (used as the app's origin in Google Cloud Console)
   // Format: https://jturbert.github.io
