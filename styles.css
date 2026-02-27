@@ -61,26 +61,10 @@ body {
 .header-left { display: flex; align-items: center; gap: 12px; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 
-.app-brand {
-  display: flex; align-items: center; gap: 8px;
-}
-
-.app-logo {
-  width: 48px; height: 48px;
-  background: var(--blue);
-  border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.app-title {
-  font-size: 43px;
-  font-weight: 700;
-  color: #e81515;
-  letter-spacing: -0.3px;
-  font-family: 'Gill Sans', GillSans, 'Gill Sans MT', sans-serif;
-  line-height: 1;
+.app-wordmark svg {
+  height: 44px;
+  width: auto;
+  display: block;
 }
 
 .user-name {
