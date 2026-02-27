@@ -10,14 +10,18 @@
 
 <header class="app-header">
   <div class="header-left">
-    <div class="app-logo">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-      </svg>
+    <div class="app-brand">
+      <div class="app-logo">
+        <svg id="rma-logo" width="36" height="36" viewBox="0 0 570 570" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <defs><style>#rma-logo .st0{font-family:GillSans-Bold,'Gill Sans';font-size:200px;font-weight:700}#rma-logo .st1{fill-rule:evenodd}</style></defs>
+          <path class="st1" d="M206,540.5l40.5-127.5-.5-3.5-34,8-.5-1.5,48-121-6.5-1.5-32,6h-6l.5-4.5,47.5-98.5,67-3-44.5,66.5,3.5.5,43-17,2.5,1.5-64,128,1.5,1.5,48-28,2.5.5-116.5,193.5Z"/>
+          <text class="st0" transform="translate(189.2 168.16)"><tspan x="0" y="0">M</tspan></text>
+          <text class="st0" transform="translate(59.39 336.33)"><tspan x="0" y="0">R</tspan></text>
+          <text class="st0" transform="translate(334.5 336.33)"><tspan x="0" y="0">A</tspan></text>
+        </svg>
+      </div>
+      <h1 class="app-title">BLASTER</h1>
     </div>
-    <h1 class="app-title">RMA Manager</h1>
     <span class="version-badge">Web</span>
   </div>
   <div class="header-right">
@@ -141,6 +145,7 @@
         <div class="stat-card-lg s-open"><div class="stat-num" id="sv-open">0</div><div class="stat-lbl">Open</div></div>
         <div class="stat-card-lg s-closed"><div class="stat-num" id="sv-closed">0</div><div class="stat-lbl">Closed</div></div>
         <div class="stat-card-lg s-rate"><div class="stat-num" id="sv-confirm">—</div><div class="stat-lbl">Confirmed</div></div>
+        <div class="stat-card-lg s-noconf"><div class="stat-num" id="sv-notconf">—</div><div class="stat-lbl">Not Confirmed</div></div>
         <div class="stat-card-lg"><div class="stat-num" id="sv-warranty">—</div><div class="stat-lbl">In Warranty</div></div>
       </div>
       <div class="charts-grid">
@@ -149,6 +154,7 @@
         <div class="chart-card chart-wide"><h3>Monthly Trend — Last 12 Months</h3><div id="chart-monthly"></div></div>
         <div class="chart-card"><h3>Warranty Status</h3><div id="chart-warranty"></div></div>
         <div class="chart-card"><h3>Issue Confirmation</h3><div id="chart-confirm"></div></div>
+        <div class="chart-card chart-wide"><h3>Unconfirmed Issues by Dealer</h3><div id="chart-unconf-dealer"></div></div>
         <div class="chart-card chart-wide"><h3>Top Models (up to 15)</h3><div id="chart-models"></div></div>
       </div>
     </div>

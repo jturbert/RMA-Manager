@@ -61,8 +61,12 @@ body {
 .header-left { display: flex; align-items: center; gap: 12px; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 
+.app-brand {
+  display: flex; align-items: center; gap: 8px;
+}
+
 .app-logo {
-  width: 36px; height: 36px;
+  width: 48px; height: 48px;
   background: var(--blue);
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
@@ -71,10 +75,12 @@ body {
 }
 
 .app-title {
-  font-size: 18px;
+  font-size: 43px;
   font-weight: 700;
-  color: var(--gray-900);
+  color: #e81515;
   letter-spacing: -0.3px;
+  font-family: 'Gill Sans', GillSans, 'Gill Sans MT', sans-serif;
+  line-height: 1;
 }
 
 .user-name {
@@ -668,9 +674,10 @@ body {
 }
 .stat-card-lg .stat-num   { font-size: 32px; font-weight: 800; color: var(--gray-800); line-height: 1; }
 .stat-card-lg .stat-lbl   { font-size: 11px; color: var(--gray-400); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-.stat-card-lg.s-open  .stat-num { color: var(--amber); }
+.stat-card-lg.s-open   .stat-num { color: var(--amber); }
 .stat-card-lg.s-closed .stat-num { color: var(--green); }
-.stat-card-lg.s-rate  .stat-num { color: var(--blue); }
+.stat-card-lg.s-rate   .stat-num { color: var(--blue); }
+.stat-card-lg.s-noconf .stat-num { color: var(--red); }
 
 .charts-grid {
   display: grid;
@@ -718,6 +725,7 @@ body {
 .bar-fill-open   { background: var(--amber); height: 100%; transition: width 0.4s ease; }
 .bar-fill-closed { background: var(--green);  height: 100%; transition: width 0.4s ease; }
 .bar-fill-single { background: var(--blue);   height: 100%; border-radius: 999px; transition: width 0.4s ease; }
+.bar-fill-unconf { background: var(--red);    height: 100%; border-radius: 999px; transition: width 0.4s ease; }
 .bar-count { font-size: 12px; font-weight: 600; color: var(--gray-500); width: 28px; text-align: right; flex-shrink: 0; }
 
 /* Bar chart legend */

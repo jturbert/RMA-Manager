@@ -702,9 +702,20 @@ const App = (() => {
       }
     }
 
+    // Group unconfirmed issues by dealer
+    const unconfDealerMap = {};
+    for (const e of entries) {
+      if (e.issueConfirmed !== 'No') continue;
+      const k = e.dealer || 'Unknown';
+      unconfDealerMap[k] = (unconfDealerMap[k] || 0) + 1;
+    }
+    const unconfDealers = Object.entries(unconfDealerMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count).slice(0, 12);
+
     return { total, open, closed, confirmed, notConf, pending,
              inWarr, outWarr, expWarr, unknWarr,
-             dealers, makes, models, monthly: Object.values(monthly) };
+             dealers, makes, models, monthly: Object.values(monthly), unconfDealers };
   }
 
   function renderStats() {
@@ -723,6 +734,7 @@ const App = (() => {
     document.getElementById('sv-open').textContent     = s.open;
     document.getElementById('sv-closed').textContent   = s.closed;
     document.getElementById('sv-confirm').textContent  = pct(s.confirmed,s.total)+'%';
+    document.getElementById('sv-notconf').textContent  = s.notConf;
     document.getElementById('sv-warranty').textContent = pct(s.inWarr,s.total)+'%';
 
     // Stacked bar rows (open + closed)
@@ -782,6 +794,19 @@ const App = (() => {
       { label:'Not Confirmed', count:s.notConf,   color:'#dc2626' },
       { label:'Pending',       count:s.pending,   color:'#d1d5db' }
     ], 'chart-confirm');
+
+    // Unconfirmed issues by dealer
+    const maxUnconf = Math.max(...s.unconfDealers.map(x => x.count), 1);
+    document.getElementById('chart-unconf-dealer').innerHTML = s.unconfDealers.length
+      ? s.unconfDealers.map(item => `
+        <div class="bar-row">
+          <div class="bar-label" title="${esc(item.name)}">${esc(item.name)}</div>
+          <div class="bar-track">
+            <div class="bar-fill-unconf" style="width:${pct(item.count,maxUnconf)}%"></div>
+          </div>
+          <div class="bar-count">${item.count}</div>
+        </div>`).join('')
+      : '<p class="stats-empty">No unconfirmed issues — all clear!</p>';
 
     // Top models table
     document.getElementById('chart-models').innerHTML = s.models.length ? `
@@ -889,7 +914,29 @@ const App = (() => {
       await Storage.savePDF(editingId, fname, buffer, 'invoice');
       editingPDFs = await Storage.getPDFsForEntry(editingId);
       renderModalFileList();
-      showToast('Invoice PDF saved.', 'success');
+
+      // Parse invoice for purchase date and infer warranty status
+      let warrantyMsg = '';
+      try {
+        const parsed = await PDFParser.processPDF(buffer, file.name);
+        if (parsed.invoiceDate && entry.date) {
+          const rmaDate  = new Date(entry.date);
+          const diffDays = (rmaDate - parsed.invoiceDate) / 86400000;
+          if (!isNaN(rmaDate.getTime()) && diffDays >= 0) {
+            entry.warrantyStatus = diffDays <= 730 ? 'Yes' : 'No';
+            await Storage.saveEntry(entry);
+            refreshTable();
+            const wField = document.getElementById('m-warranty');
+            if (wField) wField.value = entry.warrantyStatus;
+            warrantyMsg = ` Warranty set to ${entry.warrantyStatus} (${Math.round(diffDays)} days since purchase).`;
+            console.log(`[App] Warranty updated from invoice: ${entry.warrantyStatus} (${Math.round(diffDays)} days since purchase)`);
+          }
+        }
+      } catch (parseErr) {
+        console.warn('[App] Invoice date parse error:', parseErr.message);
+      }
+
+      showToast('Invoice PDF saved.' + warrantyMsg, 'success');
       // Upload to Drive and update pdfMeta in the background (non-blocking)
       if (Auth.isSignedIn()) {
         uploadPendingPDFs()
