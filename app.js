@@ -612,6 +612,8 @@ const App = (() => {
     if (r === 'Stock')     return '<span class="repl-badge repl-stock">Stock</span>';
     if (r === 'Warehouse') return '<span class="repl-badge repl-warehouse">Warehouse</span>';
     if (r === 'Waiting')   return '<span class="repl-badge repl-waiting">Waiting</span>';
+    if (r === 'Credit')    return '<span class="repl-badge repl-credit">Credit</span>';
+    if (r === 'Repaired')  return '<span class="repl-badge repl-repaired">Repaired</span>';
     return `<span class="repl-badge repl-unknown">${esc(r)}</span>`;
   }
 

@@ -331,6 +331,8 @@ body {
 .repl-stock     { background: var(--green-bg);          color: var(--green); }
 .repl-warehouse { background: #dbeafe;                  color: #1d4ed8; }
 .repl-waiting   { background: #fef3c7;                  color: #b45309; }
+.repl-credit    { background: #f3e8ff;                  color: #7c3aed; }
+.repl-repaired  { background: #ccfbf1;                  color: #0f766e; }
 .repl-unknown   { background: var(--gray-100);          color: var(--gray-400); }
 .col-replaced   { white-space: nowrap; }
 .deleted-empty  { text-align: center; color: var(--gray-400); padding: 16px; font-size: 13px; }
