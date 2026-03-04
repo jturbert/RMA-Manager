@@ -333,20 +333,39 @@ const App = (() => {
       const dateFixEntries     = []; // Stored date doesn't match email's actual sent date
 
       for (const e of emails) {
+        // Primary lookup: by Gmail message ID (exact match for same email re-fetched)
         const existing = await Storage.entryByEmailId(e.messageId);
-        if (!existing) {
+
+        if (existing) {
+          if (existing.deleted) {
+            // Previously archived — do not re-import; respect the user's decision
+            console.log(`[App] Skipping RMA #${existing.rmaNumber} — entry was archived by user`);
+          } else if (!existing.model || !existing.serialNumber) {
+            missingFieldEmails.push({ email: e, existing });
+          } else if (!existing.make && e.parsed?.brandGuess) {
+            brandFixEntries.push({ email: e, existing });
+          } else if (e.receivedDateTime && existing.date !== e.receivedDateTime) {
+            dateFixEntries.push({ email: e, existing });
+          }
+          continue;  // handled — skip the RMA-number check below
+        }
+
+        // Secondary lookup: by RMA number — catches duplicate emails (forwarded, re-sent,
+        // or a follow-up email sharing the same RMA#) and manually-created entries.
+        const byRma = e.parsed?.rmaNumber
+          ? await Storage.entryByRmaNumber(e.parsed.rmaNumber) : null;
+
+        if (byRma) {
+          if (byRma.deleted) {
+            // Same RMA number was archived — skip silently
+            console.log(`[App] Skipping RMA #${byRma.rmaNumber} — exists as archived entry`);
+          } else if (!byRma.model || !byRma.serialNumber) {
+            // Existing entry is incomplete — merge rather than create new
+            missingFieldEmails.push({ email: e, existing: byRma });
+          }
+          // If complete, the duplicate email carries no new info — skip
+        } else {
           newEmails.push(e);
-        } else if (!existing.model || !existing.serialNumber) {
-          // Entry is missing key parsed fields — re-parse any stored PDFs
-          // (warrantyStatus intentionally excluded: Dune Blue uses visual-only radio buttons
-          //  that PDF.js cannot read; warranty must be set manually in the Actions dialog)
-          missingFieldEmails.push({ email: e, existing });
-        } else if (!existing.make && e.parsed?.brandGuess) {
-          // Entry has fields but brand is blank — quick fix from subject line
-          brandFixEntries.push({ email: e, existing });
-        } else if (e.receivedDateTime && existing.date !== e.receivedDateTime) {
-          // Entry is complete but has the wrong date (e.g. was stored as the forwarding date)
-          dateFixEntries.push({ email: e, existing });
         }
       }
 
@@ -996,25 +1015,49 @@ const App = (() => {
 
   async function deleteEntry() {
     if (!editingId) return;
-    if (!confirm('Delete this RMA entry and its stored PDFs?\n\nThis cannot be undone.')) return;
-    // Remove PDF files from Drive before wiping local records
-    if (Auth.isSignedIn()) {
-      const pdfsWithDriveId = editingPDFs.filter(p => p.driveFileId);
-      if (pdfsWithDriveId.length) {
-        const driveIds = new Set(pdfsWithDriveId.map(p => p.driveFileId));
-        drivePdfMeta = drivePdfMeta.filter(m => !driveIds.has(m.driveFileId));
-        for (const pdf of pdfsWithDriveId) {
-          DriveStore.deletePDF(pdf.driveFileId).catch(e =>
-            console.warn('[Drive] PDF delete failed:', e.message)
-          );
-        }
-      }
-    }
-    await Storage.deleteEntry(editingId);   // also removes linked PDFs from IndexedDB
+    if (!confirm('Archive this entry?\n\nIt will be removed from the dashboard but kept in Settings → Deleted Entries, where you can reinstate it at any time.')) return;
+    const entry = await Storage.getEntry(editingId);
+    if (!entry) return;
+    entry.deleted   = true;
+    entry.deletedAt = new Date().toISOString();
+    await Storage.saveEntry(entry);
     closeModal();
-    showToast('Entry deleted.');
+    showToast('Entry archived — find it in Settings → Deleted Entries.', 'success');
     await refreshTable();
     await pushToDrive();
+  }
+
+  // Restore a soft-deleted entry back to the main dashboard
+  async function reinstateEntry(id) {
+    const entry = await Storage.getEntry(id);
+    if (!entry) return;
+    delete entry.deleted;
+    delete entry.deletedAt;
+    await Storage.saveEntry(entry);
+    showToast(`RMA #${entry.rmaNumber} reinstated.`, 'success');
+    await loadDeletedEntries();
+    await refreshTable();
+    await pushToDrive();
+  }
+
+  // Populate the Deleted Entries table in Settings
+  async function loadDeletedEntries() {
+    const tbody = document.getElementById('deleted-tbody');
+    if (!tbody) return;
+    const entries = await Storage.getDeletedEntries();
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="deleted-empty">No archived entries.</td></tr>';
+      return;
+    }
+    entries.sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''));
+    tbody.innerHTML = entries.map(e => `<tr>
+      <td><span class="rma-num">#${esc(e.rmaNumber)}</span></td>
+      <td class="col-date">${esc(e.date)}</td>
+      <td>${esc(e.dealer)}</td>
+      <td>${esc(e.model)}</td>
+      <td class="col-date">${e.deletedAt ? esc(e.deletedAt.slice(0, 10)) : '—'}</td>
+      <td><button class="btn btn-sm btn-secondary" onclick="App.reinstateEntry(${e.id})">Reinstate</button></td>
+    </tr>`).join('');
   }
 
   // ============================================================
@@ -1145,8 +1188,8 @@ const App = (() => {
     if (target) target.classList.add('active');
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     if (navEl) navEl.classList.add('active');
-    if (name === 'stats')     renderStats();
-    if (name === 'settings')  populateBrandExportSelect();
+    if (name === 'stats')    renderStats();
+    if (name === 'settings') { populateBrandExportSelect(); loadDeletedEntries(); }
   }
 
   // ============================================================
@@ -1180,7 +1223,7 @@ const App = (() => {
     saveSettings, saveExcelName, saveCopyAs, confirmClearData,
     fetchEmails, showSection, setFilter, onSearch, sortBy,
     openModal, closeModal, closeModalOnBackdrop, onStatusToggle,
-    saveEntry, deleteEntry, downloadPDF, uploadInvoicePDF,
+    saveEntry, deleteEntry, reinstateEntry, downloadPDF, uploadInvoicePDF,
     exportExcel, exportByBrand,
     exportBackup, importBackup
   };

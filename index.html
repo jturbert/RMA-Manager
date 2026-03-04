@@ -260,6 +260,25 @@
         </div>
       </div>
       <div class="settings-card">
+        <h3>Deleted Entries</h3>
+        <p class="settings-desc">Entries removed from the dashboard are kept here. Reinstate any entry to restore it to the main list.</p>
+        <div class="table-wrap" style="max-height:280px;overflow-y:auto;border-radius:8px">
+          <table class="rma-table" style="font-size:13px">
+            <thead><tr>
+              <th>RMA #</th>
+              <th>Date</th>
+              <th>Dealer</th>
+              <th>Model</th>
+              <th>Archived</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="deleted-tbody">
+              <tr><td colspan="6" class="deleted-empty">No archived entries.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="settings-card">
         <h3>How Files Work (Web Version)</h3>
         <ul class="about-list">
           <li><strong>Cloud sync</strong>: RMA entries sync automatically via Google Drive — sign in on any device to get your latest data</li>
@@ -344,7 +363,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
-      <button class="btn btn-danger-ghost" onclick="App.deleteEntry()">Delete Entry</button>
+      <button class="btn btn-danger-ghost" onclick="App.deleteEntry()">Archive Entry</button>
       <button class="btn btn-primary" onclick="App.saveEntry()">Save Changes</button>
     </div>
   </div>

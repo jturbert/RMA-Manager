@@ -333,6 +333,7 @@ body {
 .repl-waiting   { background: #fef3c7;                  color: #b45309; }
 .repl-unknown   { background: var(--gray-100);          color: var(--gray-400); }
 .col-replaced   { white-space: nowrap; }
+.deleted-empty  { text-align: center; color: var(--gray-400); padding: 16px; font-size: 13px; }
 
 /* Column sizing helpers */
 .col-date    { white-space: nowrap; font-size: 13px; color: var(--gray-600); }

@@ -63,12 +63,29 @@ const Storage = (() => {
   }
 
   // ---- RMA Entries ----
-  const saveEntry            = e   => idbPut('entries', e);
-  const getEntry             = id  => idbGet('entries', id);
-  const getAllEntries         = ()  => idbGetAll('entries');
+  const saveEntry  = e  => idbPut('entries', e);
+  const getEntry   = id => idbGet('entries', id);
+
+  // Active entries only (deleted:true entries are excluded from the main dashboard)
+  const getAllEntries = async () => {
+    const all = await idbGetAll('entries');
+    return all.filter(e => !e.deleted);
+  };
+
+  // Deleted/archived entries (shown in Settings > Deleted Entries)
+  const getDeletedEntries = async () => {
+    const all = await idbGetAll('entries');
+    return all.filter(e => !!e.deleted);
+  };
+
   const entryExistsByEmailId = async eid => !!(await idbGetByIndex('entries','emailId',eid));
   const entryByEmailId       = eid => idbGetByIndex('entries','emailId',eid);
 
+  // Look up by RMA number (used to prevent duplicates when re-fetching emails)
+  const entryByRmaNumber = rma => idbGetByIndex('entries','rmaNumber', String(rma));
+
+  // Hard-delete: permanently removes the entry and its linked PDFs from IndexedDB.
+  // Only called by clearAllData() and truly permanent removal flows.
   async function deleteEntry(id) {
     const pdfs = await getPDFsForEntry(id);
     for (const p of pdfs) await idbDelete('pdfs', p.id);
@@ -239,7 +256,8 @@ const Storage = (() => {
   }
 
   return {
-    saveEntry, getEntry, deleteEntry, getAllEntries, entryExistsByEmailId, entryByEmailId,
+    saveEntry, getEntry, deleteEntry, getAllEntries, getDeletedEntries,
+    entryExistsByEmailId, entryByEmailId, entryByRmaNumber,
     getSetting, setSetting,
     savePDF, updatePDFDriveId, getAllPDFs, getPDFsForEntry, downloadPDF, buildFilename,
     clearAllData, exportBackup, importBackup
