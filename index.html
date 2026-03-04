@@ -117,7 +117,7 @@
           <th onclick="App.sortBy('serialNumber')" class="sortable">Serial # <span class="sort-icon">&#8597;</span></th>
           <th onclick="App.sortBy('warrantyStatus')" class="sortable">Warranty <span class="sort-icon">&#8597;</span></th>
           <th>Issue</th>
-          <th>Remarks</th>
+          <th onclick="App.sortBy('replacedFrom')" class="sortable">Replaced <span class="sort-icon">&#8597;</span></th>
           <th>Actions</th>
         </tr></thead>
         <tbody id="rma-tbody">
@@ -208,6 +208,29 @@
         </div>
       </div>
       <div class="settings-card">
+        <h3>Export by Brand</h3>
+        <p class="settings-desc">Export a supplier-ready spreadsheet for a specific brand. Includes RMA #, date, model, serial number, issue description, and how resolved.</p>
+        <div class="form-group">
+          <label for="s-brand-select">Brand</label>
+          <select id="s-brand-select" class="form-input">
+            <option value="">— All Brands —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date Range <span class="form-hint" style="display:inline">(optional)</span></label>
+          <div class="inline-row">
+            <input type="date" id="s-brand-from" class="form-input" title="From date">
+            <span style="align-self:center;padding:0 4px;color:var(--text-muted)">to</span>
+            <input type="date" id="s-brand-to" class="form-input" title="To date">
+          </div>
+          <span class="form-hint">Leave blank to include all dates.</span>
+        </div>
+        <button class="btn btn-secondary" onclick="App.exportByBrand()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Export Spreadsheet
+        </button>
+      </div>
+      <div class="settings-card">
         <h3>Backup &amp; Restore</h3>
         <p class="settings-desc">Download a full backup of all RMA entries, settings, and stored PDFs. Use it to move data to another browser or device, or just as a safety net.</p>
         <div class="form-group">
@@ -292,6 +315,14 @@
         <div class="form-grid">
           <div class="form-group full-width"><label>Course of Action</label><textarea id="m-action" class="form-input form-textarea" rows="2"></textarea></div>
           <div class="form-group"><label>Date of Resolution</label><input type="date" id="m-resolved-date" class="form-input"></div>
+          <div class="form-group"><label>Replaced From</label>
+            <select id="m-replaced-from" class="form-input">
+              <option value="">— Pending —</option>
+              <option value="Stock">From Stock</option>
+              <option value="Warehouse">From Warehouse</option>
+              <option value="Waiting">Waiting</option>
+            </select>
+          </div>
           <div class="form-group full-width"><label>How Resolved</label><textarea id="m-resolved-how" class="form-input form-textarea" rows="2"></textarea></div>
         </div>
       </div>

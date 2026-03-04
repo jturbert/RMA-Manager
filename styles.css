@@ -319,6 +319,21 @@ body {
 .warr-exp     { background: var(--gray-100);  color: var(--gray-500); }
 .warr-unknown { background: var(--gray-100);  color: var(--gray-400); }
 
+/* Replaced-from badges */
+.repl-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.repl-stock     { background: var(--green-bg);          color: var(--green); }
+.repl-warehouse { background: #dbeafe;                  color: #1d4ed8; }
+.repl-waiting   { background: #fef3c7;                  color: #b45309; }
+.repl-unknown   { background: var(--gray-100);          color: var(--gray-400); }
+.col-replaced   { white-space: nowrap; }
+
 /* Column sizing helpers */
 .col-date    { white-space: nowrap; font-size: 13px; color: var(--gray-600); }
 .col-serial  { font-family: monospace; font-size: 12px; color: var(--gray-600); white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }

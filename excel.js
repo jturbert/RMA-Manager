@@ -54,5 +54,28 @@ const Excel = (() => {
     return customName;
   }
 
-  return { downloadExcel, downloadCopyAs, DEFAULT_FILENAME, getFilename };
+  // Supplier-facing columns for brand export
+  const SUPPLIER_COLUMNS = [
+    { header:'RMA #',                key:'rmaNumber'        },
+    { header:'Date Submitted',       key:'date'             },
+    { header:'Model',                key:'model'            },
+    { header:'Serial #',             key:'serialNumber'     },
+    { header:'Description of Issue', key:'issueDescription' },
+    { header:'How Resolved',         key:'howResolved'      }
+  ];
+
+  // Download a supplier-ready spreadsheet (filtered by brand / date range)
+  function downloadBrandExcel(entries, filename) {
+    if (!filename.toLowerCase().endsWith('.xlsx')) filename += '.xlsx';
+    const wb     = XLSX.utils.book_new();
+    const sorted = [...entries].sort((a,b) => parseInt(a.rmaNumber||0)-parseInt(b.rmaNumber||0));
+    const rows   = [SUPPLIER_COLUMNS.map(c=>c.header), ...sorted.map(e => SUPPLIER_COLUMNS.map(c=>e[c.key]||''))];
+    const ws     = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']  = [8,14,20,16,44,34].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws, 'RMA Log');
+    XLSX.writeFile(wb, filename);
+    return filename;
+  }
+
+  return { downloadExcel, downloadCopyAs, downloadBrandExcel, DEFAULT_FILENAME, getFilename };
 })();

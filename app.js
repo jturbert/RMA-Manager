@@ -11,7 +11,7 @@ const App = (() => {
   let allEntries    = [];
   let currentFilter = 'all';
   let currentSearch = '';
-  let sortField     = 'date';
+  let sortField     = 'rmaNumber';
   let sortAsc       = false;
   let editingId     = null;
   let editingPDFs   = [];   // PDF records for the currently-open modal entry
@@ -588,6 +588,14 @@ const App = (() => {
     return `<span class="warr-badge warr-unknown">${esc(w)}</span>`;
   }
 
+  function replacedBadge(r) {
+    if (!r) return '<span class="repl-badge repl-unknown">—</span>';
+    if (r === 'Stock')     return '<span class="repl-badge repl-stock">Stock</span>';
+    if (r === 'Warehouse') return '<span class="repl-badge repl-warehouse">Warehouse</span>';
+    if (r === 'Waiting')   return '<span class="repl-badge repl-waiting">Waiting</span>';
+    return `<span class="repl-badge repl-unknown">${esc(r)}</span>`;
+  }
+
   function truncate(s, max) {
     if (!s) return '';
     return s.length > max ? esc(s.substring(0, max)) + '…' : esc(s);
@@ -613,7 +621,7 @@ const App = (() => {
       <td class="col-serial" title="${esc(e.serialNumber)}">${esc(e.serialNumber)}</td>
       <td class="col-warranty">${warrantyBadge(e.warrantyStatus)}</td>
       <td class="col-truncate" title="${esc(e.issueDescription)}">${truncate(e.issueDescription, 45)}</td>
-      <td class="col-truncate" title="${esc(e.notes)}">${truncate(e.notes, 35)}</td>
+      <td class="col-replaced">${replacedBadge(e.replacedFrom)}</td>
       <td><div class="action-btns"><button class="btn-icon" title="Edit" onclick="App.openModal(${e.id})">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       </button></div></td>
@@ -851,6 +859,7 @@ const App = (() => {
     document.getElementById('m-action').value           = entry.courseOfAction   || '';
     document.getElementById('m-resolved-date').value   = entry.dateOfResolution  || '';
     document.getElementById('m-resolved-how').value    = entry.howResolved       || '';
+    document.getElementById('m-replaced-from').value   = entry.replacedFrom     || '';
     document.getElementById('m-notes').value            = entry.notes            || '';
 
     const toggle = document.getElementById('m-status-toggle');
@@ -975,6 +984,7 @@ const App = (() => {
       courseOfAction:   document.getElementById('m-action').value.trim(),
       dateOfResolution: document.getElementById('m-resolved-date').value,
       howResolved:      document.getElementById('m-resolved-how').value.trim(),
+      replacedFrom:     document.getElementById('m-replaced-from').value,
       notes:            document.getElementById('m-notes').value.trim()
     };
     await Storage.saveEntry(updated);
@@ -1093,6 +1103,39 @@ const App = (() => {
     showToast('Downloading: ' + fn + ' — check your Downloads / Files app.', 'success');
   }
 
+  // Populate brand dropdown in settings from all stored entries
+  async function populateBrandExportSelect() {
+    const sel = document.getElementById('s-brand-select');
+    if (!sel) return;
+    const entries = await Storage.getAllEntries();
+    const brands  = [...new Set(entries.map(e => e.make).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">— All Brands —</option>' +
+      brands.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
+  }
+
+  // Export a filtered supplier spreadsheet by brand and optional date range
+  async function exportByBrand() {
+    const brand = document.getElementById('s-brand-select')?.value.trim();
+    const from  = document.getElementById('s-brand-from')?.value;
+    const to    = document.getElementById('s-brand-to')?.value;
+
+    let entries = await Storage.getAllEntries();
+    if (brand) entries = entries.filter(e => e.make === brand);
+    if (from)  entries = entries.filter(e => e.date >= from);
+    if (to)    entries = entries.filter(e => e.date <= to);
+
+    if (!entries.length) {
+      showToast('No entries match the selected filters.', 'error');
+      return;
+    }
+
+    const label    = brand ? brand.replace(/\s+/g, '_') : 'All_Brands';
+    const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const filename = `RMA_${label}_${datePart}.xlsx`;
+    Excel.downloadBrandExcel(entries, filename);
+    showToast(`Downloading: ${filename} (${entries.length} entries)`, 'success');
+  }
+
   // ============================================================
   // NAVIGATION
   // ============================================================
@@ -1102,7 +1145,8 @@ const App = (() => {
     if (target) target.classList.add('active');
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     if (navEl) navEl.classList.add('active');
-    if (name === 'stats') renderStats();
+    if (name === 'stats')     renderStats();
+    if (name === 'settings')  populateBrandExportSelect();
   }
 
   // ============================================================
@@ -1137,7 +1181,7 @@ const App = (() => {
     fetchEmails, showSection, setFilter, onSearch, sortBy,
     openModal, closeModal, closeModalOnBackdrop, onStatusToggle,
     saveEntry, deleteEntry, downloadPDF, uploadInvoicePDF,
-    exportExcel,
+    exportExcel, exportByBrand,
     exportBackup, importBackup
   };
 })();
