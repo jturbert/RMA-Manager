@@ -78,6 +78,9 @@ const Storage = (() => {
     return all.filter(e => !!e.deleted);
   };
 
+  // All entries regardless of deleted flag — used by Drive sync to avoid unique-key conflicts
+  const getAllEntriesIncludingDeleted = () => idbGetAll('entries');
+
   const entryExistsByEmailId = async eid => !!(await idbGetByIndex('entries','emailId',eid));
   const entryByEmailId       = eid => idbGetByIndex('entries','emailId',eid);
 
@@ -256,7 +259,7 @@ const Storage = (() => {
   }
 
   return {
-    saveEntry, getEntry, deleteEntry, getAllEntries, getDeletedEntries,
+    saveEntry, getEntry, deleteEntry, getAllEntries, getDeletedEntries, getAllEntriesIncludingDeleted,
     entryExistsByEmailId, entryByEmailId, entryByRmaNumber,
     getSetting, setSetting,
     savePDF, updatePDFDriveId, getAllPDFs, getPDFsForEntry, downloadPDF, buildFilename,

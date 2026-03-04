@@ -249,17 +249,25 @@ const App = (() => {
       const { entries: driveEntries, pdfMeta } = driveData;
       drivePdfMeta = pdfMeta;   // cache for lazy PDF downloads when modal is opened
 
-      const localEntries  = await Storage.getAllEntries();
-      const localByEmail  = new Map(localEntries.map(e => [e.emailId, e]));
-      const driveByEmail  = new Map(driveEntries.map(e => [e.emailId, e]));
+      // Use ALL local entries (including archived) for the lookup map.
+      // Without this, archived entries are invisible to the sync and Drive
+      // tries to re-insert them, hitting the unique emailId constraint.
+      const allLocalEntries = await Storage.getAllEntriesIncludingDeleted();
+      const localEntries    = allLocalEntries.filter(e => !e.deleted);  // active only (for deletion sweep)
+      const localByEmail    = new Map(allLocalEntries.filter(e => e.emailId).map(e => [e.emailId, e]));
+      const driveByEmail    = new Map(driveEntries.map(e => [e.emailId, e]));
 
       // Update / add entries from Drive
       for (const driveEntry of driveEntries) {
         const local = localByEmail.get(driveEntry.emailId);
         if (local) {
           // Overwrite local fields with Drive values but keep the local id
-          // so existing PDF links (by entryId) remain intact
-          await Storage.saveEntry({ ...driveEntry, id: local.id });
+          // so existing PDF links (by entryId) remain intact.
+          // Also preserve any local archived status — if the user archived an entry
+          // on this device, don't let a Drive sync quietly restore it.
+          const merged = { ...driveEntry, id: local.id };
+          if (local.deleted) { merged.deleted = true; merged.deletedAt = local.deletedAt; }
+          await Storage.saveEntry(merged);
         } else {
           // Entry exists on Drive but not locally — add it
           // Strip the id so IndexedDB assigns a fresh local one
@@ -268,7 +276,8 @@ const App = (() => {
         }
       }
 
-      // Remove local entries that were deleted on another device
+      // Remove local ACTIVE entries that were deleted on another device
+      // (archived entries are intentionally excluded from this sweep)
       for (const local of localEntries) {
         if (local.emailId && !driveByEmail.has(local.emailId)) {
           await Storage.deleteEntry(local.id);
