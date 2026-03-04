@@ -118,19 +118,21 @@ const PDFParser = (() => {
     return data;
   }
 
-  // ---- Detect whether a PDF is an invoice ----
+  // ---- Detect whether a PDF is a Dune Blue RMA form ----
+  // Primary classifier: if it IS an RMA form, parse it as one.
+  // If it is NOT an RMA form, treat it as an invoice and extract a purchase date.
+  function isRMAForm(text) {
+    const lower = (text || '').toLowerCase();
+    // Dune Blue-specific markers
+    if (lower.includes('duneblue.com') || lower.includes('dune blue')) return true;
+    // Generic RMA form structure shared by this template
+    if (lower.includes('describe problem') && lower.includes('dealer name')) return true;
+    return false;
+  }
+
+  // Legacy helper kept for any callers that still reference isInvoice()
   function isInvoice(text, filename) {
-    const lower    = text.toLowerCase();
-    const nameLower = (filename || '').toLowerCase();
-    if (nameLower.includes('invoice') || nameLower.includes('inv_') || nameLower.includes('inv-')) {
-      return true;
-    }
-    const invoiceKeywords = [
-      'invoice number', 'invoice #', 'invoice no', 'inv #', 'inv no',
-      'bill to', 'amount due', 'subtotal', 'total due',
-      'purchase order', 'payment terms', 'remit to'
-    ];
-    return invoiceKeywords.some(kw => lower.includes(kw));
+    return !isRMAForm(text);
   }
 
   // ---- Known audio brands: [canonicalName, ...aliases] ----
@@ -540,14 +542,16 @@ const PDFParser = (() => {
   }
 
   // Scan invoice text for a purchase/invoice date.
-  // Looks for common label keywords then tries to parse the date that follows
-  // (on the same line or up to 7 lines later, to handle table layouts).
+  // Strategy 1: look for a labeled date keyword on the same line or nearby.
+  // Strategy 2: fallback — scan every short line for any parseable date.
   function extractInvoiceDate(text) {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const today = new Date();
 
     // Regex matching lines that introduce an invoice/purchase date
-    const DATE_LABEL = /^(factuurdatum|invoice[\s\-]?date|datum|dato|date|fakturadatum|fakturadato|rechnungsdatum|data\s+fattura)\s*[:\-]?\s*/i;
+    const DATE_LABEL = /^(factuurdatum|invoice[\s\-]?date|datum|dato|date|fakturadatum|fakturadato|rechnungsdatum|data\s+fattura|order[\s\-]?date|purchase[\s\-]?date|sale[\s\-]?date|besteldatum|verkoopdatum|aankoopdatum|datum\s+van\s+aankoop|order\s+placed|sold\s+on)\s*[:\-]?\s*/i;
 
+    // Strategy 1 – labeled date
     for (let i = 0; i < lines.length; i++) {
       const lm = lines[i].match(DATE_LABEL);
       if (!lm) continue;
@@ -556,8 +560,8 @@ const PDFParser = (() => {
       const rest = lines[i].slice(lm[0].length).trim();
       if (rest) {
         const d = parseDateStr(rest);
-        if (d) {
-          console.log(`[PDFParser] Invoice date: ${d.toISOString().slice(0, 10)}`);
+        if (d && d <= today) {
+          console.log(`[PDFParser] Invoice date (labeled): ${d.toISOString().slice(0, 10)}`);
           return d;
         }
       }
@@ -565,10 +569,23 @@ const PDFParser = (() => {
       // Or on one of the next few lines (handles "Datum\nVervaldatum\nFactuur\n03-12-2025")
       for (let j = i + 1; j < Math.min(i + 7, lines.length); j++) {
         const d = parseDateStr(lines[j]);
-        if (d) {
-          console.log(`[PDFParser] Invoice date: ${d.toISOString().slice(0, 10)}`);
+        if (d && d <= today) {
+          console.log(`[PDFParser] Invoice date (after label): ${d.toISOString().slice(0, 10)}`);
           return d;
         }
+      }
+    }
+
+    // Strategy 2 – bare date fallback: scan every short line for any parseable date.
+    // Many shop receipts/invoices simply print the date without a label.
+    // Restrict to short lines (≤ 35 chars) to avoid matching numbers inside addresses
+    // or reference strings. Only accept past dates.
+    for (const line of lines) {
+      if (line.length > 35) continue;
+      const d = parseDateStr(line);
+      if (d && d <= today) {
+        console.log(`[PDFParser] Invoice date (fallback scan): ${d.toISOString().slice(0, 10)}`);
+        return d;
       }
     }
 
@@ -586,8 +603,13 @@ const PDFParser = (() => {
 
       const text        = await extractTextFromPDF(pdf);
       const formData    = await extractFormData(pdf);
-      const invoice     = isInvoice(text, filename);
-      const fields      = invoice ? {} : parseRMAFields(text, formData);
+      // Primary classifier: RMA form vs invoice.
+      // A PDF is an RMA form if it matches the Dune Blue template structure.
+      // Everything else (shop receipts, web-shop PDFs, etc.) is treated as an
+      // invoice — we extract its purchase date to infer warranty status.
+      const rmaForm     = isRMAForm(text);
+      const invoice     = !rmaForm;
+      const fields      = rmaForm ? parseRMAFields(text, formData) : {};
       const invoiceDate = invoice ? extractInvoiceDate(text) : null;
 
       console.log('[PDFParser] Raw text (first 600 chars):\n', text.substring(0, 600));
@@ -600,5 +622,5 @@ const PDFParser = (() => {
     }
   }
 
-  return { extractText, isInvoice, parseRMAFields, processPDF };
+  return { extractText, isInvoice, isRMAForm, parseRMAFields, processPDF };
 })();
