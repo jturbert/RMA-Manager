@@ -740,20 +740,9 @@ const App = (() => {
       }
     }
 
-    // Group unconfirmed issues by dealer
-    const unconfDealerMap = {};
-    for (const e of entries) {
-      if (e.issueConfirmed !== 'No') continue;
-      const k = e.dealer || 'Unknown';
-      unconfDealerMap[k] = (unconfDealerMap[k] || 0) + 1;
-    }
-    const unconfDealers = Object.entries(unconfDealerMap)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count).slice(0, 12);
-
     return { total, open, closed, confirmed, notConf, pending,
              inWarr, outWarr, expWarr, unknWarr,
-             dealers, makes, models, monthly: Object.values(monthly), unconfDealers };
+             dealers, makes, models, monthly: Object.values(monthly) };
   }
 
   function renderStats() {
@@ -832,19 +821,6 @@ const App = (() => {
       { label:'Not Confirmed', count:s.notConf,   color:'#dc2626' },
       { label:'Pending',       count:s.pending,   color:'#d1d5db' }
     ], 'chart-confirm');
-
-    // Unconfirmed issues by dealer
-    const maxUnconf = Math.max(...s.unconfDealers.map(x => x.count), 1);
-    document.getElementById('chart-unconf-dealer').innerHTML = s.unconfDealers.length
-      ? s.unconfDealers.map(item => `
-        <div class="bar-row">
-          <div class="bar-label" title="${esc(item.name)}">${esc(item.name)}</div>
-          <div class="bar-track">
-            <div class="bar-fill-unconf" style="width:${pct(item.count,maxUnconf)}%"></div>
-          </div>
-          <div class="bar-count">${item.count}</div>
-        </div>`).join('')
-      : '<p class="stats-empty">No unconfirmed issues — all clear!</p>';
 
     // Top models table
     document.getElementById('chart-models').innerHTML = s.models.length ? `
@@ -1191,6 +1167,89 @@ const App = (() => {
   }
 
   // ============================================================
+  // BATCH PDF DOWNLOAD
+  // ============================================================
+  async function batchDownloadPDFs() {
+    const all = await Storage.getAllPDFs();
+    if (!all.length) { showToast('No PDFs stored in this browser yet.', 'error'); return; }
+    showToast(`Zipping ${all.length} PDF(s)…`);
+    try {
+      const zip = new JSZip();
+      for (const pdf of all) {
+        zip.file(pdf.filename, pdf.data);
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url; a.download = `RMA_PDFs_${date}.zip`;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      showToast(`Downloaded ${all.length} PDF(s) as ZIP.`, 'success');
+    } catch (err) {
+      showToast('ZIP failed: ' + err.message, 'error');
+    }
+  }
+
+  // ============================================================
+  // STOCK REPLACEMENT EXPORT
+  // ============================================================
+  async function exportStockReplacements() {
+    const from      = document.getElementById('s-stock-from')?.value;
+    const to        = document.getElementById('s-stock-to')?.value;
+    const recipient = document.getElementById('s-stock-recipient')?.value.trim();
+
+    let entries = await Storage.getAllEntries();
+    entries = entries.filter(e => e.replacedFrom === 'Stock');
+    if (from) entries = entries.filter(e => e.date >= from);
+    if (to)   entries = entries.filter(e => e.date <= to);
+
+    if (!entries.length) {
+      showToast('No Stock replacement entries match the selected range.', 'error');
+      return;
+    }
+
+    const date     = new Date().toISOString().slice(0, 10);
+    const datePart = date.replace(/-/g, '');
+    const filename = `RMA_Stock_${datePart}.xlsx`;
+    Excel.downloadBrandExcel(entries, filename);
+
+    // Log this export
+    const logKey  = 'stockExportLog';
+    const raw     = await Storage.getSetting(logKey);
+    const log     = raw ? JSON.parse(raw) : [];
+    log.unshift({ date, recipient: recipient || '—', count: entries.length, from: from || '—', to: to || '—', filename });
+    if (log.length > 50) log.length = 50;
+    await Storage.setSetting(logKey, JSON.stringify(log));
+
+    showToast(`Downloading: ${filename} (${entries.length} entries)`, 'success');
+    renderStockExportLog();
+  }
+
+  async function renderStockExportLog() {
+    const el = document.getElementById('stock-export-log');
+    if (!el) return;
+    const raw = await Storage.getSetting('stockExportLog');
+    const log = raw ? JSON.parse(raw) : [];
+    if (!log.length) { el.textContent = 'No exports yet.'; return; }
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse">
+      <thead><tr style="text-align:left;border-bottom:1px solid var(--gray-200)">
+        <th style="padding:4px 8px">Date</th>
+        <th style="padding:4px 8px">Recipient</th>
+        <th style="padding:4px 8px">Entries</th>
+        <th style="padding:4px 8px">Period</th>
+      </tr></thead>
+      <tbody>${log.map(r => `<tr style="border-bottom:1px solid var(--gray-100)">
+        <td style="padding:4px 8px">${esc(r.date)}</td>
+        <td style="padding:4px 8px">${esc(r.recipient)}</td>
+        <td style="padding:4px 8px">${r.count}</td>
+        <td style="padding:4px 8px">${esc(r.from)} → ${esc(r.to)}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  }
+
+  // ============================================================
   // NAVIGATION
   // ============================================================
   function showSection(name, navEl) {
@@ -1200,7 +1259,7 @@ const App = (() => {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     if (navEl) navEl.classList.add('active');
     if (name === 'stats')    renderStats();
-    if (name === 'settings') { populateBrandExportSelect(); loadDeletedEntries(); }
+    if (name === 'settings') { populateBrandExportSelect(); loadDeletedEntries(); renderStockExportLog(); }
   }
 
   // ============================================================
@@ -1235,7 +1294,7 @@ const App = (() => {
     fetchEmails, showSection, setFilter, onSearch, sortBy,
     openModal, closeModal, closeModalOnBackdrop, onStatusToggle,
     saveEntry, deleteEntry, reinstateEntry, downloadPDF, uploadInvoicePDF,
-    exportExcel, exportByBrand,
+    exportExcel, exportByBrand, exportStockReplacements, batchDownloadPDFs,
     exportBackup, importBackup
   };
 })();

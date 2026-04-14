@@ -8,7 +8,7 @@
 // Security notes:
 //   • PKCE — no client secret is ever used or stored
 //   • State parameter prevents CSRF attacks
-//   • Access tokens stored in sessionStorage ONLY (cleared on tab close)
+//   • Access tokens stored in localStorage ONLY (cleared on tab close)
 //   • All API calls go directly to Google — no third-party servers
 //
 // Setup: In Google Cloud Console → your OAuth client → Authorized redirect URIs:
@@ -100,9 +100,9 @@ const Auth = (() => {
     // Register the permanent callback message listener
     window.addEventListener('message', _handleMessage);
 
-    // Restore a still-valid token from sessionStorage (survives page refreshes)
-    const stored = sessionStorage.getItem(SESSION_TOKEN_KEY);
-    const expiry  = parseInt(sessionStorage.getItem(SESSION_EXPIRY_KEY) || '0');
+    // Restore a still-valid token from localStorage (survives page refreshes)
+    const stored = localStorage.getItem(SESSION_TOKEN_KEY);
+    const expiry  = parseInt(localStorage.getItem(SESSION_EXPIRY_KEY) || '0');
     if (stored && Date.now() < expiry - 60000) {
       accessToken = stored;
       tokenExpiry = expiry;
@@ -136,8 +136,8 @@ const Auth = (() => {
     _verifier = _challenge = _state = null;
 
     // Store for verification after the popup returns the code
-    sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
-    sessionStorage.setItem(PKCE_STATE_KEY,    state);
+    localStorage.setItem(PKCE_VERIFIER_KEY, verifier);
+    localStorage.setItem(PKCE_STATE_KEY,    state);
 
     // Build the Google authorization URL
     const callbackUrl = getCallbackUrl();
@@ -160,8 +160,8 @@ const Auth = (() => {
     );
 
     if (!popup || popup.closed) {
-      sessionStorage.removeItem(PKCE_VERIFIER_KEY);
-      sessionStorage.removeItem(PKCE_STATE_KEY);
+      localStorage.removeItem(PKCE_VERIFIER_KEY);
+      localStorage.removeItem(PKCE_STATE_KEY);
       if (typeof App !== 'undefined') {
         App.onAuthError(
           'Popup was blocked. Allow popups for this site in your browser settings, then try again.'
@@ -182,10 +182,10 @@ const Auth = (() => {
 
     const { code, error, state } = event.data;
 
-    const savedState   = sessionStorage.getItem(PKCE_STATE_KEY);
-    const codeVerifier = sessionStorage.getItem(PKCE_VERIFIER_KEY);
-    sessionStorage.removeItem(PKCE_STATE_KEY);
-    sessionStorage.removeItem(PKCE_VERIFIER_KEY);
+    const savedState   = localStorage.getItem(PKCE_STATE_KEY);
+    const codeVerifier = localStorage.getItem(PKCE_VERIFIER_KEY);
+    localStorage.removeItem(PKCE_STATE_KEY);
+    localStorage.removeItem(PKCE_VERIFIER_KEY);
 
     if (error) {
       if (typeof App !== 'undefined') App.onAuthError(error);
@@ -237,8 +237,8 @@ const Auth = (() => {
 
       accessToken = data.access_token;
       tokenExpiry = Date.now() + ((data.expires_in || 3600) * 1000);
-      sessionStorage.setItem(SESSION_TOKEN_KEY,  accessToken);
-      sessionStorage.setItem(SESSION_EXPIRY_KEY, String(tokenExpiry));
+      localStorage.setItem(SESSION_TOKEN_KEY,  accessToken);
+      localStorage.setItem(SESSION_EXPIRY_KEY, String(tokenExpiry));
 
       await _refreshUserInfo();
       if (onSignInDone) onSignInDone(userInfo);
@@ -271,8 +271,8 @@ const Auth = (() => {
     accessToken = null;
     tokenExpiry = 0;
     userInfo    = null;
-    sessionStorage.removeItem(SESSION_TOKEN_KEY);
-    sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+    localStorage.removeItem(SESSION_TOKEN_KEY);
+    localStorage.removeItem(SESSION_EXPIRY_KEY);
     // Prepare PKCE for the next sign-in
     preparePKCE();
   }
@@ -282,8 +282,8 @@ const Auth = (() => {
     // Token expired — user must sign in again
     accessToken = null;
     tokenExpiry = 0;
-    sessionStorage.removeItem(SESSION_TOKEN_KEY);
-    sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+    localStorage.removeItem(SESSION_TOKEN_KEY);
+    localStorage.removeItem(SESSION_EXPIRY_KEY);
     throw new Error('Session expired. Please sign in again.');
   }
 
