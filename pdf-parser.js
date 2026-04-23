@@ -142,6 +142,8 @@ const PDFParser = (() => {
     ['Campfire Audio',  'Campfire'],
     ['HiFiMAN',         'Hifiman'],
     ['Meze',            'MEZE'],
+    ['Noble Audio',     'Noble'],
+    ['Feliks Audio',    'Feliks'],
     ['Questyle'],
     ['LAiV'],
     ['HEDD'],
@@ -232,6 +234,10 @@ const PDFParser = (() => {
     if (/^(ord(?:er)?[\s#\-])/i.test(s)) return false;   // "ORD16533", "order # 22076"
     if (/^(order[\s#])/i.test(s))    return false;       // "order # 22076"
     if (/\s/.test(s) && !/\d/.test(s)) return false;     // multi-word, no digits → name
+    // Reject customer reference patterns: Name-Brand-Number (e.g. "Kiril-Noble-21864")
+    // Three or more hyphen-separated segments where the first is all letters = a reference
+    const parts = s.split('-');
+    if (parts.length >= 3 && /^[A-Za-z]+$/.test(parts[0])) return false;
     return /\d/.test(s) && s.length <= 30;               // has digits, short → serial
   }
 
@@ -311,8 +317,10 @@ const PDFParser = (() => {
       result.make  = brand;
       result.model = model;
 
-      // Serial number at index 6 (if present and looks like one)
-      if (beforeUrl.length > 6 && looksLikeSerialNumber(beforeUrl[6])) {
+      // Serial number at index 6 (if present and looks like one).
+      // When serial is blank the Reference value slides into slot 6, making
+      // beforeUrl only 7 items long. Require ≥ 8 items before treating [6] as serial.
+      if (beforeUrl.length > 7 && looksLikeSerialNumber(beforeUrl[6])) {
         result.serialNumber = beforeUrl[6];
       }
     }

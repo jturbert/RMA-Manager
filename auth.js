@@ -26,10 +26,11 @@ const Auth = (() => {
   const GOOGLE_AUTH_URL  = 'https://accounts.google.com/o/oauth2/v2/auth';
   const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
-  const SESSION_TOKEN_KEY  = 'rma_gtoken';
-  const SESSION_EXPIRY_KEY = 'rma_gtoken_exp';
-  const PKCE_VERIFIER_KEY  = 'rma_pkce_v';
-  const PKCE_STATE_KEY     = 'rma_pkce_s';
+  const SESSION_TOKEN_KEY   = 'rma_gtoken';
+  const SESSION_EXPIRY_KEY  = 'rma_gtoken_exp';
+  const REFRESH_TOKEN_KEY   = 'rma_gtoken_refresh';
+  const PKCE_VERIFIER_KEY   = 'rma_pkce_v';
+  const PKCE_STATE_KEY      = 'rma_pkce_s';
 
   let accessToken  = null;
   let tokenExpiry  = 0;
@@ -149,8 +150,8 @@ const Auth = (() => {
     url.searchParams.set('state',                 state);
     url.searchParams.set('code_challenge',        challenge);
     url.searchParams.set('code_challenge_method', 'S256');
-    url.searchParams.set('access_type',           'online');
-    url.searchParams.set('prompt',                'select_account');
+    url.searchParams.set('access_type',           'offline');
+    url.searchParams.set('prompt',                'select_account consent');
 
     // Open the Google sign-in popup — MUST be synchronous (no await before this)
     const popup = window.open(
@@ -239,6 +240,9 @@ const Auth = (() => {
       tokenExpiry = Date.now() + ((data.expires_in || 3600) * 1000);
       localStorage.setItem(SESSION_TOKEN_KEY,  accessToken);
       localStorage.setItem(SESSION_EXPIRY_KEY, String(tokenExpiry));
+      if (data.refresh_token) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+      }
 
       await _refreshUserInfo();
       if (onSignInDone) onSignInDone(userInfo);
@@ -273,13 +277,45 @@ const Auth = (() => {
     userInfo    = null;
     localStorage.removeItem(SESSION_TOKEN_KEY);
     localStorage.removeItem(SESSION_EXPIRY_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
     // Prepare PKCE for the next sign-in
     preparePKCE();
   }
 
   async function getAccessToken() {
     if (accessToken && Date.now() < tokenExpiry - 60000) return accessToken;
-    // Token expired — user must sign in again
+
+    // Try a silent refresh using the stored refresh token
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (refreshToken) {
+      try {
+        const body = new URLSearchParams({
+          client_id:     CONFIG.googleClientId,
+          client_secret: CONFIG.googleClientSecret || '',
+          refresh_token: refreshToken,
+          grant_type:    'refresh_token'
+        });
+        const res  = await fetch(GOOGLE_TOKEN_URL, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body:    body.toString()
+        });
+        const data = await res.json();
+        if (data.access_token) {
+          accessToken = data.access_token;
+          tokenExpiry = Date.now() + ((data.expires_in || 3600) * 1000);
+          localStorage.setItem(SESSION_TOKEN_KEY,  accessToken);
+          localStorage.setItem(SESSION_EXPIRY_KEY, String(tokenExpiry));
+          console.log('[Auth] Token silently refreshed.');
+          return accessToken;
+        }
+        console.warn('[Auth] Refresh response error:', data.error);
+      } catch (err) {
+        console.warn('[Auth] Token refresh failed:', err.message);
+      }
+    }
+
+    // No refresh token or refresh failed — user must sign in again
     accessToken = null;
     tokenExpiry = 0;
     localStorage.removeItem(SESSION_TOKEN_KEY);
